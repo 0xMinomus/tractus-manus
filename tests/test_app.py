@@ -23,7 +23,7 @@ from tests.helpers import make_hand
 BOUNDS = ScreenBounds(0, 0, 1920, 1080)
 
 
-def make_setup():
+def make_setup(*, left_hold_ms: int = 0):
     cfg = AppConfig(
         control=ControlConfig(
             active_area=ActiveAreaConfig(0.0, 1.0, 0.0, 1.0),
@@ -32,7 +32,9 @@ def make_setup():
             click_anchor_ms=90,
             sensitivity=1.0,
         ),
-        gestures=replace(GestureConfig(), pinch_stable_ms=0),
+        gestures=replace(
+            GestureConfig(), pinch_stable_ms=0, left_hold_ms=left_hold_ms
+        ),
     )
     app = HandTrackApp(cfg, RunOptions(dry_run=True))
     cursor = CursorController(BOUNDS, cfg.control)
@@ -76,6 +78,32 @@ def test_click_anchor_hold_and_release_glue() -> None:
     assert not mouse.left_is_down
     assert mouse.events[0] == ("left_down", 0)
     assert mouse.events[1] == ("left_up", 0)
+
+
+def test_tap_click_does_not_turn_into_hold() -> None:
+    app, cursor, mouse, engine = make_setup(left_hold_ms=300)
+
+    def frame(t: float, hand):
+        state = engine.update([hand] if hand else [], t)
+        pos = app._apply_state(state, cursor, mouse, t)
+        if pos is not None:
+            mouse.move(*pos)
+        return state
+
+    frame(0.1, make_hand("point"))
+    frame(0.2, make_hand("point"))  # unlock
+    frame(0.3, make_hand("point", pinch="index"))
+    anchor = mouse.position
+    assert not mouse.left_is_down
+
+    # Lepas sebelum hold: harus klik bersih, bukan tombol kiri tertahan.
+    state = frame(0.45, make_hand("point"))
+    assert state.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+    assert not mouse.left_is_down
+    assert mouse.position == anchor
+    assert ("left_down", 0) in mouse.events
+    assert ("left_up", 0) in mouse.events
+    assert mouse.events.count(("left_down", 0)) == 1
 
 
 def test_hand_loss_releases_button_glue() -> None:

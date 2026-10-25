@@ -23,9 +23,16 @@ def test_defaults_when_missing(tmp_path: Path) -> None:
 
 def test_repo_config_is_valid() -> None:
     cfg = load_config(ROOT / "config.json")
-    assert cfg == AppConfig()
+    # config.json adalah konfigurasi runtime pengguna (mis. classifier aktif),
+    # jadi jangan paksa sama dengan default. Pastikan bagian inti tetap benar.
+    base = AppConfig()
+    assert cfg.camera == base.camera
+    assert cfg.tracking == base.tracking
+    assert cfg.control == base.control
+    assert cfg.ui == base.ui
     assert cfg.camera.width == 1280
     assert cfg.gestures.middle_click_press < cfg.gestures.middle_click_release
+    assert cfg.gestures.classifier.model_path == "models/gesture_classifier.npz"
 
 
 def test_partial_merge(tmp_path: Path) -> None:

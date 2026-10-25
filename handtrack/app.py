@@ -74,7 +74,7 @@ class HandTrackApp:
         if self.options.duration:
             print(f"  Durasi        : {self.options.duration:.0f} detik (uji)")
         print("  Gestur        :")
-        print("    JEPIT TELUNJUK + JEMPOL     -> klik kiri / tahan / drag")
+        print("    JEPIT TELUNJUK + JEMPOL     -> lepas cepat = klik, tahan = drag")
         print("    JEPIT TENGAH + JEMPOL       -> klik kanan")
         print("    JEPIT JARI MANIS + JEMPOL   -> klik tengah")
         print("    TELUNJUK + TENGAH (2 jari)  -> scroll (tahan 0,12 dtk)")

@@ -91,7 +91,11 @@ class CursorController:
         if self._frozen:
             if duration_s is None:
                 self._freeze_until = None
-            elif self._freeze_until is not None:
+            elif self._freeze_until is None:
+                # Beku tanpa batas (fase tentatif klik) lalu diberi durasi
+                # anchor saat klik/ hold diputuskan.
+                self._freeze_until = now + duration_s
+            else:
                 self._freeze_until = max(self._freeze_until, now + duration_s)
             return
         self._frozen = True

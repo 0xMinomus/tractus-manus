@@ -95,7 +95,8 @@ class GestureConfig:
     pinch_release: float = 0.52
     pinch_margin: float = 0.75
     pinch_stable_ms: int = 25
-    click_cooldown_ms: int = 150
+    click_cooldown_ms: int = 100
+    left_hold_ms: int = 300
     middle_click_press: float = 0.18
     middle_click_release: float = 0.32
     left_click: bool = True
@@ -230,6 +231,8 @@ def _validate(cfg: AppConfig) -> None:
         raise ConfigError("gestures.pinch_stable_ms harus 0..200")
     if not (0 <= g.click_cooldown_ms <= 1000):
         raise ConfigError("gestures.click_cooldown_ms harus 0..1000")
+    if not (0 <= g.left_hold_ms <= 2000):
+        raise ConfigError("gestures.left_hold_ms harus 0..2000")
     if not (0.02 <= g.middle_click_press < g.middle_click_release <= 1.5):
         raise ConfigError(
             "gestures: butuh 0.02 <= middle_click_press < middle_click_release <= 1.5"

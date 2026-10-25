@@ -64,6 +64,20 @@ def test_anchor_freeze_then_resume() -> None:
     assert cursor.update((0.6, 0.5), 0.36) is None
 
 
+def test_timed_anchor_after_indefinite_freeze() -> None:
+    cursor = make_cursor()
+    assert cursor.update((0.5, 0.5), 0.0) == (960, 540)
+    cursor.freeze(0.1, None)  # fase tentatif klik
+    assert cursor.update((0.6, 0.5), 0.2) is None
+    cursor.freeze(0.2, 0.09)  # tap diputuskan: anchor 90 ms
+    assert cursor.update((0.6, 0.5), 0.25) is None
+    assert cursor.frozen
+    assert cursor.update((0.6, 0.5), 0.30) is None  # glide mulai
+    assert not cursor.frozen
+    resumed = cursor.update((0.6, 0.5), 0.36)
+    assert resumed is not None
+
+
 def test_hold_freeze_and_reacquire() -> None:
     cursor = make_cursor()
     assert cursor.update((0.5, 0.5), 0.0) == (960, 540)

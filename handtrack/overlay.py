@@ -234,7 +234,10 @@ class Overlay:
             detail, detail_color = "KLIK DIKUNCI - TUNGGU SEBENTAR", AMBER
         elif state.pinch is not None and state.pinch.active:
             if state.pinch.kind is Pinch.INDEX:
-                detail = "JEPIT TELUNJUK - KLIK KIRI DITAHAN"
+                if state.pinch_down:
+                    detail = "KLIK KIRI DITAHAN - GESER UNTUK DRAG"
+                else:
+                    detail = "LEPAS CEPAT = KLIK  |  TAHAN = DRAG"
             elif state.pinch.kind is Pinch.MIDDLE:
                 detail = "LEPAS UNTUK KLIK KANAN"
             else:
@@ -268,6 +271,9 @@ class Overlay:
         elif state.pause_progress > 0:
             progress = state.pause_progress
             progress_color = RED
+        elif state.click_progress > 0:
+            progress = state.click_progress
+            progress_color = GREEN
         elif state.scroll_progress > 0:
             progress = state.scroll_progress
             progress_color = AMBER
@@ -321,8 +327,8 @@ class Overlay:
 
     def _draw_hints(self, frame: np.ndarray) -> None:
         frame_h, frame_w = frame.shape[:2]
-        line1 = "JEPIT = KLIK KIRI / TAHAN   |   JEMPOL + TENGAH = KLIK KANAN"
-        line2 = "2 JARI = SCROLL   |   KEPAL = JEDA   |   ESC = KELUAR"
+        line1 = "JEPIT LEPAS CEPAT = KLIK   |   JEPIT TAHAN = DRAG"
+        line2 = "JEMPOL+TENGAH = KLIK KANAN | 2 JARI = SCROLL | KEPAL = JEDA"
         scale = _fit_scale(line1, frame_w - 52, 0.46)
         panel_w = min(
             max(

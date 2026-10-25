@@ -38,7 +38,7 @@
     "pinch_release": 0.52,
     "pinch_margin": 0.75,
     "pinch_stable_ms": 25,
-    "click_cooldown_ms": 150,
+    "click_cooldown_ms": 100,
     "middle_click_press": 0.18,
     "middle_click_release": 0.32,
     "left_click": true,
@@ -61,7 +61,8 @@
       "model_path": "models/gesture_classifier.npz",
       "confidence": 0.65,
       "smoothing": 0.6
-    }
+    },
+    "left_hold_ms": 300
   },
   "ui": {
     "show_preview": true,
