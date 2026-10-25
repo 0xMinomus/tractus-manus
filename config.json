@@ -1,0 +1,72 @@
+{
+  "camera": {
+    "index": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 60,
+    "backend": "dshow",
+    "mirror": true,
+    "swap_handedness": true
+  },
+  "tracking": {
+    "process_width": 800,
+    "max_hands": 2,
+    "min_detection_confidence": 0.6,
+    "min_hand_presence_confidence": 0.55,
+    "min_tracking_confidence": 0.55
+  },
+  "control": {
+    "primary_hand": "auto",
+    "target_monitor": "primary",
+    "click_anchor_ms": 60,
+    "reacquire_ms": 150,
+    "sensitivity": 1.2,
+    "active_area": {
+      "x_min": 0.12,
+      "x_max": 0.88,
+      "y_min": 0.1,
+      "y_max": 0.8
+    },
+    "smoothing": {
+      "min_cutoff": 2.5,
+      "beta": 7.0,
+      "derivative_cutoff": 1.8
+    }
+  },
+  "gestures": {
+    "pinch_press": 0.36,
+    "pinch_release": 0.52,
+    "pinch_margin": 0.75,
+    "pinch_stable_ms": 25,
+    "click_cooldown_ms": 150,
+    "middle_click_press": 0.18,
+    "middle_click_release": 0.32,
+    "left_click": true,
+    "right_click": true,
+    "middle_click": true,
+    "scroll": {
+      "enabled": true,
+      "enter_hold_ms": 120,
+      "exit_hold_ms": 150,
+      "step_px": 40,
+      "smooth": 0.8,
+      "invert": false
+    },
+    "pause": {
+      "enabled": true,
+      "hold_ms": 1000
+    },
+    "classifier": {
+      "enabled": true,
+      "model_path": "models/gesture_classifier.npz",
+      "confidence": 0.65,
+      "smoothing": 0.6
+    }
+  },
+  "ui": {
+    "show_preview": true,
+    "always_on_top": true,
+    "show_skeleton": true,
+    "debug": false
+  }
+}
