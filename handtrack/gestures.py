@@ -68,6 +68,7 @@ class FrameState:
     ai_confidence: float = 0.0
     pinch_down: bool = False
     click_progress: float = 0.0
+    touch_clicked: bool = False
 
 
 _PINCH_LABEL = {
@@ -103,6 +104,9 @@ class GestureEngine:
         self._pinch_down = False
         self._pinch_at = 0.0
         self._pinch_start_distance = 0.0
+        self._touch_clicked = False
+        self._touch_armed = True
+        self._hold_blocked = False
         self._pending_pinch: Pinch | None = None
         self._pending_since: float | None = None
         self._last_label: str | None = None
@@ -233,6 +237,14 @@ class GestureEngine:
             return PinchInfo(features.closest_pinch, features.closest_distance, False)
         return None
 
+    def _touch_click(self, now: float) -> list[Action]:
+        """Klik kiri penuh saat ujung jempol dan telunjuk menempel."""
+        self._touch_clicked = True
+        self._touch_armed = False
+        self._hold_blocked = True
+        self._click_cooldown_until = now + self.cfg.click_cooldown_ms / 1000.0
+        return [Action.LEFT_DOWN, Action.LEFT_UP]
+
     def _release_button(self, click: bool, now: float) -> list[Action]:
         if self._pinch is None:
             return []
@@ -242,9 +254,8 @@ class GestureEngine:
         if kind is Pinch.INDEX:
             if was_down:
                 actions.append(Action.LEFT_UP)
-            elif click:
-                # Tap: klik bersih di posisi anchor, tanpa fase hold.
-                actions.extend((Action.LEFT_DOWN, Action.LEFT_UP))
+            # Pinch kiri yang tidak menempel tidak menghasilkan klik; klik
+            # hanya dikirim saat ujung jari benar-benar menyentuh.
         elif click:
             actions.append(
                 Action.RIGHT_CLICK if kind is Pinch.MIDDLE else Action.MIDDLE_CLICK
@@ -252,6 +263,9 @@ class GestureEngine:
         self._pinch = None
         self._pinch_ai = False
         self._pinch_down = False
+        self._touch_clicked = False
+        self._touch_armed = True
+        self._hold_blocked = False
         if click and actions:
             self._click_cooldown_until = now + self.cfg.click_cooldown_ms / 1000.0
         return actions
@@ -268,6 +282,9 @@ class GestureEngine:
         self._pending_since = None
         self._pinch_ai = False
         self._pinch_down = False
+        self._touch_clicked = False
+        self._touch_armed = True
+        self._hold_blocked = False
 
     def _enter_scroll(self, active: Hand) -> None:
         self.mode = Mode.SCROLL
@@ -328,6 +345,7 @@ class GestureEngine:
             ai_confidence=self._ai_conf,
             pinch_down=self._pinch is not None and self._pinch_down,
             click_progress=max(0.0, min(1.0, click_progress)),
+            touch_clicked=self._touch_clicked,
         )
 
     def _unlock_if_neutral(self, features: HandFeatures, now: float) -> None:
@@ -506,7 +524,6 @@ class GestureEngine:
         # Pinch yang sedang aktif ditahan sampai dilepas (hysteresis).
         if self._pinch is not None:
             kind = self._pinch
-            was_down = self._pinch_down
             if self._pinch_ai:
                 release = self._ai_pinch_release(kind, features)
             else:
@@ -515,25 +532,36 @@ class GestureEngine:
             click_progress = 0.0
             if release:
                 actions.extend(self._release_button(click=True, now=now))
-                # Tap kiri tetap di anchor sebentar supaya dua klik cepat
-                # mendarat di titik yang sama (double-click lebih mudah).
-                freeze = (
-                    Freeze.ANCHOR
-                    if kind is Pinch.INDEX and not was_down
-                    else Freeze.RELEASE
-                )
+                freeze = Freeze.RELEASE
                 self._pause_arm = None
                 self._scroll_arm = None
-            elif kind is Pinch.INDEX and not self._pinch_down:
-                hold_s = self.cfg.left_hold_ms / 1000.0
-                elapsed = now - self._pinch_at
-                if hold_s <= 0 or elapsed >= hold_s:
-                    self._pinch_down = True
-                    actions.append(Action.LEFT_DOWN)
-                    freeze = Freeze.ANCHOR
-                else:
-                    click_progress = elapsed / hold_s
-                    freeze = Freeze.HOLD
+            elif kind is Pinch.INDEX:
+                distance = features.pinch.get(kind, float("inf"))
+                if not self._pinch_down:
+                    if self._touch_armed and distance <= self.cfg.touch_press:
+                        actions.extend(self._touch_click(now))
+                        freeze = Freeze.ANCHOR
+                    else:
+                        if distance > self.cfg.touch_release:
+                            self._touch_armed = True
+                        hold_s = self.cfg.left_hold_ms / 1000.0
+                        elapsed = now - self._pinch_at
+                        if (
+                            not self._hold_blocked
+                            and distance > self.cfg.touch_release
+                            and (hold_s <= 0 or elapsed >= hold_s)
+                        ):
+                            self._pinch_down = True
+                            actions.append(Action.LEFT_DOWN)
+                            freeze = Freeze.ANCHOR
+                        else:
+                            freeze = Freeze.HOLD
+                            if (
+                                hold_s > 0
+                                and not self._hold_blocked
+                                and not self._touch_clicked
+                            ):
+                                click_progress = elapsed / hold_s
             cursor = active.norm(CURSOR_LANDMARK)
             return self._state(
                 active=active,
@@ -570,12 +598,24 @@ class GestureEngine:
                 self._pending_since = None
                 self._pause_arm = None
                 self._scroll_arm = None
-                if kind is Pinch.INDEX and self.cfg.left_hold_ms <= 0:
-                    self._pinch_down = True
-                    actions.append(Action.LEFT_DOWN)
-                    freeze = Freeze.ANCHOR
+                self._pinch_down = False
+                self._touch_clicked = False
+                self._touch_armed = True
+                self._hold_blocked = False
+                if kind is Pinch.INDEX:
+                    if self._pinch_start_distance <= self.cfg.touch_press:
+                        actions.extend(self._touch_click(now))
+                        freeze = Freeze.ANCHOR
+                    elif (
+                        self.cfg.left_hold_ms <= 0
+                        and self._pinch_start_distance > self.cfg.touch_release
+                    ):
+                        self._pinch_down = True
+                        actions.append(Action.LEFT_DOWN)
+                        freeze = Freeze.ANCHOR
+                    else:
+                        freeze = Freeze.HOLD
                 else:
-                    self._pinch_down = False
                     freeze = Freeze.HOLD
                 cursor = active.norm(CURSOR_LANDMARK)
                 return self._state(

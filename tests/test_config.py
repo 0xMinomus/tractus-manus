@@ -44,6 +44,8 @@ def test_partial_merge(tmp_path: Path) -> None:
                 "gestures": {
                     "pinch_press": 0.22,
                     "pinch_release": 0.4,
+                    "touch_press": 0.1,
+                    "touch_release": 0.15,
                     "middle_click_press": 0.1,
                     "middle_click_release": 0.2,
                 },

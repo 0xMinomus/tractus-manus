@@ -236,8 +236,10 @@ class Overlay:
             if state.pinch.kind is Pinch.INDEX:
                 if state.pinch_down:
                     detail = "KLIK KIRI DITAHAN - GESER UNTUK DRAG"
+                elif state.touch_clicked:
+                    detail = "KLIK TERKIRIM - TUTUP LAGI UNTUK DOUBLE"
                 else:
-                    detail = "LEPAS CEPAT = KLIK  |  TAHAN = DRAG"
+                    detail = "NEMPEL = KLIK  |  TAHAN HAMPIR = DRAG"
             elif state.pinch.kind is Pinch.MIDDLE:
                 detail = "LEPAS UNTUK KLIK KANAN"
             else:
@@ -327,7 +329,7 @@ class Overlay:
 
     def _draw_hints(self, frame: np.ndarray) -> None:
         frame_h, frame_w = frame.shape[:2]
-        line1 = "JEPIT LEPAS CEPAT = KLIK   |   JEPIT TAHAN = DRAG"
+        line1 = "NEMPELKAN JARI = KLIK   |   TAHAN HAMPIR = DRAG"
         line2 = "JEMPOL+TENGAH = KLIK KANAN | 2 JARI = SCROLL | KEPAL = JEDA"
         scale = _fit_scale(line1, frame_w - 52, 0.46)
         panel_w = min(

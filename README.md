@@ -6,16 +6,17 @@ memutus kontrol.
 
 - **Kursor** mengikuti buku jari telunjuk, dipetakan ke layar dengan filter
   One Euro yang dibuat lebih responsif (halus saat diam, cepat saat bergerak).
-- **Klik kiri** dengan pinch jempol + telunjuk lalu lepas cepat. Tombol baru
-  ditekan setelah pinch ditahan 300 ms, jadi klik singkat tidak berubah jadi
-  drag. **Hold/drag** dengan menahan pinch lebih lama, lalu geser tangan.
+- **Klik kiri** dengan pinch jempol + telunjuk sampai ujung jari **menempel**;
+  satu klik bersih dikirim saat kontak, tanpa tombol tertahan. **Hold/drag**
+  dengan pinch **hampir menempel** (ada celah kecil) dan tahan ±300 ms, lalu
+  geser tangan.
 - **Klik kanan** dengan pinch jempol + jari tengah.
 - **Klik tengah** (opsional) dengan pinch rapat jempol + jari manis.
 - **Scroll** dengan pose dua jari (telunjuk + tengah) lalu gerakkan tangan
   naik/turun.
 - **Jeda / lanjut** dengan mengepalkan tangan dan menahannya sebentar, atau
   tombol `P`.
-- **Klik ganda**: dua pinch-lepas cepat. Kursor ditahan di titik klik sebentar
+- **Klik ganda**: dua pinch-tempel cepat. Kursor ditahan di titik klik sebentar
   supaya kedua klik mendarat di posisi yang sama.
 - Jendela preview menampilkan skeleton tangan, mode, progress bar, dan preview
   posisi kursor di layar.
@@ -88,9 +89,9 @@ Lingkaran hijau di preview menandai titik kursor yang sebenarnya.
 | Gestur | Aksi |
 | --- | --- |
 | Gerakkan tangan (telunjuk) | Gerakkan kursor |
-| Pinch jempol + telunjuk, lepas <300 ms | Klik kiri (tombol tidak ditahan) |
-| Pinch jempol + telunjuk, tahan ≥300 ms | Hold/drag; geser tangan lalu lepas |
-| Dua pinch-lepas cepat | Double-click |
+| Pinch jempol + telunjuk sampai ujung menempel | Klik kiri (satu klik bersih saat kontak) |
+| Pinch jempol + telunjuk hampir menempel, tahan ≥300 ms | Hold/drag; geser tangan lalu lepas |
+| Dua pinch-tempel cepat | Double-click |
 | Pinch jempol + jari tengah | Klik kanan (lepas pinch untuk mengeksekusi) |
 | Pinch rapat jempol + jari manis | Klik tengah (opsional) |
 | Pose V (telunjuk + tengah), tahan ±0,12 dtk | Masuk mode scroll; gerakkan tangan naik/turun |
@@ -102,24 +103,33 @@ Catatan:
 
 - Jeda tidak lagi memakai telapak terbuka—telapak sekarang netral. Pakai
   kepalan yang ditahan sekitar 1 detik.
-- **Klik kiri vs hold.** Saat pinch dimulai, kursor membeku dan HUD
-  menampilkan progress bar `LEPAS CEPAT = KLIK | TAHAN = DRAG`. Lepas sebelum
-  300 ms (`gestures.left_hold_ms`) untuk klik bersih: aplikasi mengirim
-  down+up sekaligus di titik itu, jadi tidak ada tombol kiri yang tertahan.
-  Tahan melewati 300 ms untuk hold/drag; setelah itu kursor mengikuti tangan
-  sampai pinch dilepas. Geser sebelum 300 ms tidak memulai drag—ini disengaja
-  agar klik tidak berubah menjadi seleksi.
+- **Klik kiri vs hold.** Ada dua zona pinch:
+  - **Menempel** (`touch_press`, default 0,18): aplikasi langsung mengirim
+    down+up **satu kali** di titik itu. Jari yang tetap menempel tidak
+    mengulang klik dan tidak berubah menjadi hold.
+  - **Hampir menempel** (`touch_release`..`pinch_press`, default 0,26..0,36):
+    tahan ±300 ms (`gestures.left_hold_ms`) untuk menekan tombol kiri dan
+    drag. Kursor dibekukan selama fase menunggu; HUD menampilkan progress
+    `NEMPEL = KLIK | TAHAN HAMPIR = DRAG`.
+  - Untuk klik kedua, buka jari melewati `touch_release` lalu tempelkan lagi.
+    Klik kedua boleh terjadi dalam pinch yang sama (double pinch).
 - Saat pinch jempol + jari tengah, jaga agar ujung telunjuk tidak ikut
   menyentuh jempol. Aplikasi memilih jari yang **jelas paling dekat**; kalau
   jarak telunjuk dan tengah hampir sama, klik sengaja tidak dijalankan dan HUD
-  menampilkan `JEPIT AMBIGU`. Setelah setiap klik ada jeda 100 ms; pinch baru
-  yang masih dipegang setelah jeda boleh lanjut (tidak perlu dilepas dua kali).
-- Tap kiri tetap menahan kursor ±60 ms setelah klik
+  menampilkan `JEPIT AMBIGU`. Setelah pinch baru, ada jeda 100 ms sebelum
+  pinch berikutnya boleh mulai; pinch yang sudah menempel setelah jeda boleh
+  lanjut.
+- Klik menempel tetap menahan kursor ±60 ms setelah klik
   (`control.click_anchor_ms`) supaya double-click mendarat di titik yang sama.
-- Klik memakai tiga aturan ketat: jari pemenang harus unik (margin 0,75),
-  posisi pinch harus stabil ±25 ms, dan tidak ada klik selama cooldown 100 ms.
+- Setelah satu sentuhan klik, hold sengaja diblokir sampai pinch dilepas.
+  Untuk mulai hold/drag, buka tangan dulu lalu lakukan pinch
+  **hampir-menempel** yang baru. Pinch dekat yang dilepas tanpa pernah
+  menempel tidak menghasilkan klik. Kursor juga tetap di anchor selama pinch
+  masih aktif; buka pinch melewati `pinch_release` untuk menggerakkannya lagi.
+- Klik memakai aturan ketat: jari pemenang harus unik (margin 0,75), posisi
+  pinch harus stabil ±25 ms, dan sentuhan harus melewati `touch_press`.
   Pinch yang dimulai oleh AI dilepas berdasarkan jarak jari (bukan menunggu
-  label AI yang halus), jadi klik singkat tidak tertahan.
+  label AI yang halus).
 - Setelah tangan muncul atau berganti, hanya **klik** yang dikunci ±0,25 dtk;
   scroll dan kepalan tetap bisa dipakai. HUD menampilkan `KLIK DIKUNCI`.
 - Jika label KANAN/KIRI terbalik, tekan `H` (atau ubah
@@ -286,8 +296,10 @@ Semua pengaturan ada di `config.json` (dibuat ulang dengan
 | `control.smoothing.derivative_cutoff` | `1.8` | Smoothing estimasi kecepatan untuk filter |
 | `gestures.pinch_press/release` | `0.36/0.52` | Ambang pinch jempol-telunjuk, dinormalisasi ukuran telapak |
 | `gestures.pinch_margin` | `0.75` | Jari pemenang harus ≤0,75× jarak jari pesaing; mencegah klik tertukar |
+| `gestures.touch_press` | `0.18` | Jari dianggap **menempel** (klik) bila jarak pinch ≤ nilai ini |
+| `gestures.touch_release` | `0.26` | Jari dianggap lepas dari sentuhan di atas nilai ini (histeresis) |
 | `gestures.pinch_stable_ms` | `25` | Pinch harus stabil selama ini sebelum klik dimulai |
-| `gestures.left_hold_ms` | `300` | Lepas sebelum ini = klik; tahan lebih lama = hold/drag (0 = hold langsung) |
+| `gestures.left_hold_ms` | `300` | Lama menahan zona hampir-menempel sebelum masuk hold/drag |
 | `gestures.click_cooldown_ms` | `100` | Jeda singkat setelah klik sebelum pinch baru boleh mulai |
 | `gestures.middle_click_press/release` | `0.18/0.32` | Ambang khusus klik tengah (jempol-jari manis) |
 | `gestures.left/right/middle_click` | `true` | Aktif/nonaktifkan jenis klik |
@@ -317,12 +329,15 @@ area ini yang dipetakan ke seluruh layar.
   perkecil `active_area` (mis. `0.18-0.82`).
 - Klik sulit: naikkan `pinch_press` sedikit (mis. `0.40`) dan `pinch_release`
   (mis. `0.56`). Lihat jarak pinch di overlay `D`.
-- Klik singkat masih berubah hold: turunkan `gestures.left_hold_ms` (mis.
-  `220`), atau turunkan `pinch_release`/`classifier.smoothing` agar pinch
-  lebih cepat dianggap lepas. Naikkan `left_hold_ms` jika hold/drag malah
-  terlalu cepat aktif.
-- Klik tak sengaja: turunkan `pinch_press`, turunkan `pinch_margin` ke `0.7`,
-  naikkan `pinch_stable_ms` ke `40`, dan/atau tunjukkan pose netral dulu.
+- Jari sudah menempel tetapi tidak klik: naikkan `gestures.touch_press`
+  sedikit (mis. `0.20-0.22`); jika klik malah terpicu saat hampir menempel,
+  turunkan. `touch_release` harus di antara `touch_press` dan `pinch_press`.
+- Hold sulit/tidak sengaja: turunkan atau naikkan `gestures.left_hold_ms`
+  (mis. `250` lebih cepat, `350` lebih sabar). Jaga celah kecil di zona
+  hampir-menempel; jangan sampai ujung jari menempel.
+- Klik kedua/double-click sulit: pastikan jari membuka melewati
+  `touch_release` sebelum menempel lagi, dan turunkan `click_cooldown_ms`
+  ke `70-80`.
 - Klik kiri/kanan tertukar: jauhkan jari yang tidak dipakai saat pinch. HUD
   `JEPIT AMBIGU` berarti jarak kedua jari terlalu dekat. Turunkan
   `pinch_margin` ke `0.7` bila masih tertukar; naikkan ke `0.85` bila klik
@@ -349,13 +364,13 @@ diblokir kebijakan Windows, atau index salah. `--camera 1`, `2`, ... untuk
 mencari kamera lain.
 
 **Kursor bergerak tetapi klik tidak terjadi.** Buka overlay debug (`D`) dan
-lihat jarak pinch. Pastikan tangan yang aktif adalah tangan yang Anda pakai
-(mode kanan diutamakan). Setelah ganti tangan, tunjukkan pose netral sebentar.
-Jika HUD menampilkan `JEPIT AMBIGU`, jauhkan jari yang tidak dipakai. Setelah
-klik, tunggu singkat (100 ms) sebelum pinch berikutnya. Jika HUD menunjukkan
-progress `TAHAN = DRAG` padahal Anda ingin klik, lepas pinch sebelum progress
-penuh (300 ms). Beberapa aplikasi berjalan sebagai administrator; jalankan
-HandTrack sebagai administrator agar `SendInput` diterima.
+lihat jarak pinch. Klik kiri hanya dikirim saat ujung jempol dan telunjuk
+benar-benar menempel (jarak ≤ `gestures.touch_press`, default 0,18). Jika
+jarak Anda masih di atas itu, tempelkan sedikit lagi atau naikkan
+`touch_press` ke 0,20-0,22. Setelah klik, buka jari melewati `touch_release`
+(0,26) sebelum menempel lagi. `JEPIT AMBIGU` berarti jari lain ikut dekat;
+jauhkan. Beberapa aplikasi berjalan sebagai administrator; jalankan HandTrack
+sebagai administrator agar `SendInput` diterima.
 
 **Klik kiri dan kanan tertukar.** Pinch harus jelas: saat klik kiri, ujung
 tengah jangan menempel ke jempol; saat klik kanan, telunjuk jangan ikut
@@ -364,18 +379,19 @@ harus jelas lebih kecil; turunkan ke `0,7` untuk lebih ketat. Cooldown 100 ms
 mencegah jari lain langsung memicu klik kedua. Lihat HUD `JEPIT AMBIGU` dan
 angka di overlay `D`.
 
-**Klik biasa malah jadi hold/drag.** Pastikan Anda melepas pinch sebelum
-progress bar `LEPAS CEPAT = KLIK | TAHAN = DRAG` penuh. Untuk respons lebih
-cepat, turunkan `gestures.left_hold_ms` ke `220-250` dan/atau
-`gestures.click_cooldown_ms` ke `70-80`. Klik kiri sekarang mengirim down+up
-saat pinch dilepas, jadi tidak ada tombol kiri yang tertahan hanya karena
-pinch sempat ditahan sebentar.
+**Klik biasa malah jadi hold/drag.** Berarti jari berhenti di zona
+**hampir-menempel** (tidak menempel) selama ≥300 ms. Untuk klik, tempelkan
+ujung jari sampai menyentuh; klik dikirim saat kontak, bukan saat ditahan.
+Untuk hold, jaga celah kecil dan tahan. Jika transisi menuju kontak terlalu
+lambat, turunkan `gestures.left_hold_ms` ke `250-280` atau besarkan
+`touch_press`.
 
-**Double-click sulit.** Lakukan dua pinch-lepas singkat tanpa jeda lama;
-setiap klik mengirim down+up penuh. Kursor ditahan `control.click_anchor_ms`
-(60 ms) setelah klik supaya kedua klik berada di titik yang sama. Jika masih
-sulit, turunkan `left_hold_ms`/`click_cooldown_ms` dan pastikan tangan tidak
-bergeser jauh di antara dua pinch.
+**Double-click sulit.** Lakukan dua **sentuhan** cepat: tempelkan jempol +
+telunjuk, buka jari melewati `touch_release`, lalu tempelkan lagi. Setiap
+sentuhan mengirim down+up penuh, dan kursor ditahan `control.click_anchor_ms`
+(60 ms) agar kedua klik berada di titik yang sama. Setelah sentuhan, hold
+diblokir sampai pinch dilepas; jadi jangan berhenti di zona hampir-menempel
+saat ingin double-click.
 
 **Scroll susah masuk / `KLIK DIKUNCI`.** Kunci gestur sekarang hanya menahan
 **klik** selama ±0,25 dtk—scroll dan kepalan tetap bisa dipakai. Kunci hilang

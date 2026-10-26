@@ -62,3 +62,22 @@ def make_hand(
     landmarks = np.zeros((21, 3), dtype=np.float64)
     landmarks[:, :2] = array / 1000.0
     return Hand(label=label, score=0.99, landmarks=landmarks, width=1000, height=1000)
+
+
+def make_near_hand(
+    pose: str = "point",
+    near_distance: float = 0.30,
+    label: str = "Right",
+    **kwargs,
+) -> Hand:
+    """Tangan dengan jempol dekat (tetapi tidak menempel) ujung telunjuk.
+
+    Dipakai untuk gestur hold: jarak dinormalisasi panjang telapak.
+    """
+    base = make_hand(
+        pose, label=label, **{k: v for k, v in kwargs.items() if k not in ("dx", "dy")}
+    )
+    tip = base.point(8)
+    palm = base.palm_size
+    thumb = (tip[0] + near_distance * palm, tip[1])
+    return make_hand(pose, thumb=thumb, label=label, **kwargs)

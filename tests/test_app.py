@@ -18,7 +18,7 @@ from handtrack.cursor import CursorController
 from handtrack.gestures import Action, GestureEngine
 from handtrack.input import DryRunMouse
 from handtrack.mapping import ScreenBounds
-from tests.helpers import make_hand
+from tests.helpers import make_hand, make_near_hand
 
 BOUNDS = ScreenBounds(0, 0, 1920, 1080)
 
@@ -58,19 +58,19 @@ def test_click_anchor_hold_and_release_glue() -> None:
     assert mouse.position == (873, 432)
 
     frame(0.2, make_hand("point"))  # unlock gestur
-    state = frame(0.3, make_hand("point", pinch="index", dx=100))
+    state = frame(0.3, make_near_hand("point", dx=100))
     assert state.actions == [Action.LEFT_DOWN]
     assert mouse.left_is_down
     # Anchor membekukan kursor walau tangan sudah bergeser 100 px.
     assert mouse.position == (873, 432)
 
-    frame(0.38, make_hand("point", pinch="index", dx=100))
+    frame(0.38, make_near_hand("point", dx=100))
     assert mouse.position == (873, 432)
-    frame(0.50, make_hand("point", pinch="index", dx=100))
+    frame(0.50, make_near_hand("point", dx=100))
     assert mouse.position == (873, 432)
-    frame(0.55, make_hand("point", pinch="index", dx=100))
+    frame(0.55, make_near_hand("point", dx=100))
     assert mouse.position[0] > 873
-    frame(0.70, make_hand("point", pinch="index", dx=100))
+    frame(0.70, make_near_hand("point", dx=100))
     assert mouse.position == pytest.approx((1065, 432), abs=1)
 
     state = frame(0.8, make_hand("point", dx=100))
@@ -80,7 +80,7 @@ def test_click_anchor_hold_and_release_glue() -> None:
     assert mouse.events[1] == ("left_up", 0)
 
 
-def test_tap_click_does_not_turn_into_hold() -> None:
+def test_touch_click_does_not_turn_into_hold() -> None:
     app, cursor, mouse, engine = make_setup(left_hold_ms=300)
 
     def frame(t: float, hand):
@@ -92,17 +92,19 @@ def test_tap_click_does_not_turn_into_hold() -> None:
 
     frame(0.1, make_hand("point"))
     frame(0.2, make_hand("point"))  # unlock
-    frame(0.3, make_hand("point", pinch="index"))
     anchor = mouse.position
-    assert not mouse.left_is_down
-
-    # Lepas sebelum hold: harus klik bersih, bukan tombol kiri tertahan.
-    state = frame(0.45, make_hand("point"))
+    state = frame(0.3, make_hand("point", pinch="index"))
     assert state.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
     assert not mouse.left_is_down
     assert mouse.position == anchor
     assert ("left_down", 0) in mouse.events
     assert ("left_up", 0) in mouse.events
+    assert mouse.events.count(("left_down", 0)) == 1
+
+    # Tetap menempel: tidak ada klik kedua dan tidak berubah menjadi hold.
+    still = frame(0.7, make_hand("point", pinch="index"))
+    assert still.actions == []
+    assert not mouse.left_is_down
     assert mouse.events.count(("left_down", 0)) == 1
 
 
@@ -118,7 +120,7 @@ def test_hand_loss_releases_button_glue() -> None:
 
     frame(0.1, make_hand("point"))
     frame(0.2, make_hand("point"))
-    frame(0.3, make_hand("point", pinch="index"))
+    frame(0.3, make_near_hand("point"))
     assert mouse.left_is_down
     state = frame(0.4, None)
     assert state.actions == [Action.LEFT_UP]

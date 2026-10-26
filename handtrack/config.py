@@ -94,6 +94,8 @@ class GestureConfig:
     pinch_press: float = 0.36
     pinch_release: float = 0.52
     pinch_margin: float = 0.75
+    touch_press: float = 0.18
+    touch_release: float = 0.26
     pinch_stable_ms: int = 25
     click_cooldown_ms: int = 100
     left_hold_ms: int = 300
@@ -227,6 +229,10 @@ def _validate(cfg: AppConfig) -> None:
         raise ConfigError("gestures: butuh 0.02 <= pinch_press < pinch_release <= 1.5")
     if not (0.5 <= g.pinch_margin <= 1.0):
         raise ConfigError("gestures.pinch_margin harus 0.5..1.0")
+    if not (0.02 <= g.touch_press < g.touch_release < g.pinch_press):
+        raise ConfigError(
+            "gestures: butuh 0.02 <= touch_press < touch_release < pinch_press"
+        )
     if not (0 <= g.pinch_stable_ms <= 200):
         raise ConfigError("gestures.pinch_stable_ms harus 0..200")
     if not (0 <= g.click_cooldown_ms <= 1000):

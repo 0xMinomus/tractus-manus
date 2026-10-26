@@ -9,7 +9,7 @@ import pytest
 from handtrack.config import GestureConfig, PauseConfig, ScrollConfig
 from handtrack.gestures import Action, Freeze, GestureEngine, Mode
 from handtrack.hands import Pinch, analyze_hand
-from tests.helpers import make_hand
+from tests.helpers import make_hand, make_near_hand
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def test_classifier_pinch_releases_when_label_changes(cfg: GestureConfig) -> Non
     unlock(engine)
 
     fake.label, fake.confidence = "left", 0.9
-    pinched = make_hand("point", pinch="index")
+    pinched = make_near_hand("point")
     pressed = engine.update([pinched], 0.3)
     assert pressed.actions == [Action.LEFT_DOWN]
     assert pressed.ai_label == "left"
@@ -98,59 +98,76 @@ def test_classifier_fist_overrides_geometry(cfg: GestureConfig) -> None:
     assert state.mode is Mode.PAUSED
 
 
-def test_left_tap_is_a_clean_click(cfg: GestureConfig) -> None:
+def test_left_touch_click_is_clean(cfg: GestureConfig) -> None:
     tap = replace(cfg, left_hold_ms=300)
     engine = GestureEngine(tap)
     unlock(engine)
 
-    pressed = engine.update([make_hand("point", pinch="index")], 0.3)
-    assert pressed.actions == []
-    assert pressed.freeze is Freeze.HOLD
-    assert pressed.pinch_down is False
-
-    held = engine.update([make_hand("point", pinch="index")], 0.45)
-    assert held.actions == []
-    assert 0.0 < held.click_progress <= 1.0
-
-    clicked = engine.update([make_hand("point")], 0.5)
+    clicked = engine.update([make_hand("point", pinch="index")], 0.3)
     assert clicked.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
     assert clicked.freeze is Freeze.ANCHOR
     assert clicked.pinch_down is False
+    assert clicked.touch_clicked is True
+
+    # Jari tetap menempel: jangan klik ulang dan jangan berubah jadi hold.
+    still = engine.update([make_hand("point", pinch="index")], 0.65)
+    assert still.actions == []
+    assert still.pinch_down is False
+
+    # Lepas tanpa menempel lagi: tidak ada klik tambahan.
+    released = engine.update([make_hand("point")], 0.8)
+    assert released.actions == []
 
 
-def test_left_long_pinch_starts_hold(cfg: GestureConfig) -> None:
+def test_left_near_pinch_starts_hold(cfg: GestureConfig) -> None:
     tap = replace(cfg, left_hold_ms=300)
     engine = GestureEngine(tap)
     unlock(engine)
+    near = make_near_hand("point")
 
-    engine.update([make_hand("point", pinch="index")], 0.3)
-    early = engine.update([make_hand("point", pinch="index")], 0.55)
+    engine.update([near], 0.3)
+    early = engine.update([near], 0.55)
     assert early.actions == []
-    commit = engine.update([make_hand("point", pinch="index")], 0.61)
+    assert 0.0 < early.click_progress < 1.0
+    commit = engine.update([near], 0.61)
     assert commit.actions == [Action.LEFT_DOWN]
     assert commit.pinch_down is True
 
-    held = engine.update([make_hand("point", pinch="index")], 0.9)
+    held = engine.update([near], 0.9)
     assert held.actions == []
     released = engine.update([make_hand("point")], 1.0)
     assert released.actions == [Action.LEFT_UP]
     assert released.freeze is Freeze.RELEASE
 
 
-def test_two_quick_taps_emit_two_clicks(cfg: GestureConfig) -> None:
-    tap = replace(cfg, left_hold_ms=300, click_cooldown_ms=100)
+def test_near_pinch_release_without_touch_does_nothing(cfg: GestureConfig) -> None:
+    tap = replace(cfg, left_hold_ms=300)
     engine = GestureEngine(tap)
     unlock(engine)
 
-    first = engine.update([make_hand("point", pinch="index")], 0.3)
-    assert first.actions == []
-    first_click = engine.update([make_hand("point")], 0.4)
-    assert first_click.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+    engine.update([make_near_hand("point")], 0.3)
+    released = engine.update([make_hand("point")], 0.45)
+    assert released.actions == []
+    assert released.pinch is not None and not released.pinch.active
 
-    second = engine.update([make_hand("point", pinch="index")], 0.55)
-    assert second.actions == []
-    second_click = engine.update([make_hand("point")], 0.65)
-    assert second_click.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+
+def test_two_touches_in_one_pinch_click_twice(cfg: GestureConfig) -> None:
+    tap = replace(cfg, left_hold_ms=300, click_cooldown_ms=100)
+    engine = GestureEngine(tap)
+    unlock(engine)
+    near = make_near_hand("point")
+    touch = make_hand("point", pinch="index")
+
+    engine.update([near], 0.3)
+    first = engine.update([touch], 0.35)
+    assert first.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+
+    # Buka sedikit (masih di zona dekat) lalu tempelkan lagi.
+    opened = engine.update([near], 0.45)
+    assert opened.actions == []
+    second = engine.update([touch], 0.55)
+    assert second.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+    assert second.pinch_down is False
 
 
 def test_ai_pinch_releases_on_geometry(cfg: GestureConfig) -> None:
@@ -189,7 +206,7 @@ def test_feature_poses() -> None:
 def test_left_click_hold_and_release(cfg: GestureConfig) -> None:
     engine = GestureEngine(cfg)
     unlock(engine)
-    pinched = make_hand("point", pinch="index")
+    pinched = make_near_hand("point")
 
     state = engine.update([pinched], 0.3)
     assert state.actions == [Action.LEFT_DOWN]
@@ -257,7 +274,7 @@ def test_fist_never_clicks(cfg: GestureConfig) -> None:
 def test_hand_loss_releases_left_button(cfg: GestureConfig) -> None:
     engine = GestureEngine(cfg)
     unlock(engine)
-    engine.update([make_hand("point", pinch="index")], 0.3)
+    engine.update([make_near_hand("point")], 0.3)
     lost = engine.update([], 0.4)
     assert lost.actions == [Action.LEFT_UP]
     assert lost.freeze is Freeze.HOLD
@@ -324,7 +341,7 @@ def test_scroll_exits_on_pinch_without_click(cfg: GestureConfig) -> None:
     # Buka ke pose netral, lalu pinch baru baru boleh klik.
     engine.update([make_hand("point")], 0.75)
     click = engine.update([make_hand("point", pinch="index")], 0.85)
-    assert click.actions == [Action.LEFT_DOWN]
+    assert click.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
 
 def test_open_palm_does_not_pause(cfg: GestureConfig) -> None:
@@ -424,7 +441,7 @@ def test_primary_hand_prefers_right_and_switch_locks(cfg: GestureConfig) -> None
     neutral = engine.update([left], 0.4)
     assert not neutral.locked
     click = engine.update([make_hand("point", pinch="index", label="Left")], 0.5)
-    assert click.actions == [Action.LEFT_DOWN]
+    assert click.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
 
 def test_reacquire_with_existing_pinch_does_not_click(cfg: GestureConfig) -> None:
@@ -440,7 +457,7 @@ def test_reacquire_with_existing_pinch_does_not_click(cfg: GestureConfig) -> Non
     assert held.actions == []
     engine.update([make_hand("point")], 0.7)
     click = engine.update([pinched], 0.8)
-    assert click.actions == [Action.LEFT_DOWN]
+    assert click.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
 
 def test_ambiguous_pinch_does_not_click(cfg: GestureConfig) -> None:
@@ -455,30 +472,29 @@ def test_ambiguous_pinch_does_not_click(cfg: GestureConfig) -> None:
 
     # Pinch yang jelas (telunjuk saja) langsung bekerja.
     clear = engine.update([make_hand("open", pinch="index")], 0.5)
-    assert clear.actions == [Action.LEFT_DOWN]
+    assert clear.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
     assert not clear.ambiguous
 
 
-def test_click_cooldown_blocks_immediate_second_click(cfg: GestureConfig) -> None:
+def test_click_cooldown_delays_new_touch_pinch(cfg: GestureConfig) -> None:
     engine = GestureEngine(cfg)
     unlock(engine)
-    engine.update([make_hand("point", pinch="index")], 0.3)
-    released = engine.update([make_hand("point")], 0.4)
-    assert released.actions == [Action.LEFT_UP]
+    touch = make_hand("point", pinch="index")
 
-    # Jari tengah mungkin ikut dekat setelah pinch kiri lepas; jangan
-    # langsung menembak klik kanan.
-    blocked = engine.update([make_hand("point", pinch="middle")], 0.45)
+    first = engine.update([touch], 0.3)
+    assert first.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
+    released = engine.update([make_hand("point")], 0.35)
+    assert released.actions == []
+
+    # Pinch baru saat cooldown belum habis: ditunda, bukan langsung klik.
+    blocked = engine.update([touch], 0.36)
     assert blocked.actions == []
     assert blocked.pinch is not None and not blocked.pinch.active
 
-    # Setelah cooldown habis, pinch yang masih dipegang boleh lanjut. Ini
-    # yang membuat double-click cepat tidak harus dilepas dua kali.
-    started = engine.update([make_hand("point", pinch="middle")], 0.6)
-    assert started.actions == []
-    assert started.pinch is not None and started.pinch.active
-    clicked = engine.update([make_hand("point")], 0.7)
-    assert clicked.actions == [Action.RIGHT_CLICK]
+    # Setelah cooldown habis, pinch yang masih dipegang boleh klik. Ini
+    # membuat double-click cepat tidak perlu menunggu lama.
+    clicked = engine.update([touch], 0.45)
+    assert clicked.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
 
 def test_strict_click_requires_stable_candidate(cfg: GestureConfig) -> None:
@@ -489,7 +505,7 @@ def test_strict_click_requires_stable_candidate(cfg: GestureConfig) -> None:
     assert first.actions == []
     assert first.pinch is not None and not first.pinch.active
     stable = engine.update([make_hand("point", pinch="index")], 0.36)
-    assert stable.actions == [Action.LEFT_DOWN]
+    assert stable.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
     flapping = GestureEngine(strict)
     unlock(flapping)
@@ -497,7 +513,7 @@ def test_strict_click_requires_stable_candidate(cfg: GestureConfig) -> None:
     flapping.update([make_hand("point", pinch="middle")], 0.34)
     flapping.update([make_hand("point", pinch="index")], 0.38)
     after = flapping.update([make_hand("point", pinch="index")], 0.44)
-    assert after.actions == [Action.LEFT_DOWN]
+    assert after.actions == [Action.LEFT_DOWN, Action.LEFT_UP]
 
 
 def test_scroll_works_even_when_clicks_locked(cfg: GestureConfig) -> None:
