@@ -296,7 +296,7 @@ Ubah `config.json`:
     "enabled": true,
     "model_path": "models/gesture_classifier.npz",
     "confidence": 0.65,
-    "smoothing": 0.7
+    "smoothing": 0.6
   }
 }
 ```
@@ -361,7 +361,7 @@ Semua pengaturan ada di `config.json` (dibuat ulang dengan
 | `gestures.classifier.enabled` | `false` | Pakai classifier hasil training (bagian 3) |
 | `gestures.classifier.model_path` | `models/gesture_classifier.npz` | File model NPZ |
 | `gestures.classifier.confidence` | `0.65` | Ambang confidence agar prediksi AI dipakai |
-| `gestures.classifier.smoothing` | `0.7` | 0 = mentah; makin tinggi makin halus/lambat |
+| `gestures.classifier.smoothing` | `0.6` | 0 = mentah; makin tinggi makin halus/lambat |
 | `ui.show_preview` | `true` | Tampilkan jendela preview |
 | `ui.always_on_top` | `true` | Preview selalu di atas |
 | `ui.show_skeleton` | `true` | Gambar skeleton tangan |

@@ -60,7 +60,7 @@
       "enabled": true,
       "model_path": "models/gesture_classifier.npz",
       "confidence": 0.65,
-      "smoothing": 0.7
+      "smoothing": 0.6
     },
     "left_hold_ms": 300,
     "touch_press": 0.18,
