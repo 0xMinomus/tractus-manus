@@ -20,6 +20,8 @@ def test_write_sample_roundtrip(tmp_path) -> None:
     assert record["session"] == "S1"
     assert record["label"] == "neutral"
     assert record["hand"] == "Left"
+    assert record["width"] == hand.width
+    assert record["height"] == hand.height
     assert record["t"] == 1.25
     landmarks = np.asarray(record["landmarks"])
     assert landmarks.shape == (21, 3)

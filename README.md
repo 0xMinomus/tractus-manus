@@ -184,7 +184,7 @@ Jendela perekam menampilkan skeleton dan status. Tunjukkan **satu tangan**
 | Tombol | Fungsi |
 | --- | --- |
 | `1` | label `neutral` |
-| `2` | label `left` (pinch jempol + telunjuk) |
+| `2` | label `left` (pinch jempol + telunjuk: tempel **dan** hampir) |
 | `3` | label `right` (pinch jempol + tengah) |
 | `4` | label `middle` (pinch rapat jempol + jari manis) |
 | `5` | label `fist` (kepalan untuk jeda) |
@@ -196,14 +196,23 @@ Jendela perekam menampilkan skeleton dan status. Tunjukkan **satu tangan**
 Ganti label otomatis menjeda rekaman supaya data tidak tercampur. Rekam
 masing-masing label **20-40 detik**, dengan variasi jarak tangan, posisi di
 frame, sudut, dan pencahayaan. Lakukan **minimal 2 sesi** (`N`), dan isi
-**semua 6 label di setiap sesi**—trainer memakai sesi sebagai pembatas
-validasi, sehingga angka akurasinya jujur.
+**semua 6 label di setiap sesi**. HUD menampilkan `sesi x/6 label`; jangan
+menekan `N` sebelum semua label muncul. Trainer memakai sesi sebagai pembatas
+validasi; sesi yang tidak lengkap membuat akurasi tidak jujur (trainer akan
+memperingatkan dan memakai split frame yang lebih optimistis).
+
+Untuk `left`, rekam **dua variasi dalam label yang sama**:
+
+- ujung jempol + telunjuk **menempel** (klik), dan
+- **hampir menempel** dengan celah kecil (hold/drag).
 
 Pose yang direkam:
 
 - `neutral`: tangan santai/terbuka atau menunjuk seperti saat menggerakkan
   kursor; bukan pinch, bukan kepalan, bukan pose V.
-- `left` / `right` / `middle`: pinch yang Anda maksud untuk tiap klik.
+- `left`: pinch jempol + telunjuk, campur pose tempel (klik) dan hampir
+  (hold) sekitar 50:50. Jangan hanya salah satu.
+- `right` / `middle`: pinch yang Anda maksud untuk tiap klik.
 - `fist`: kepalan tangan penuh.
 - `scroll`: telunjuk + tengah terentang, jari manis/kelingking terlipat.
 
@@ -218,24 +227,47 @@ disimpan untuk menormalkan fitur.
 train.bat
 ```
 
-Trainer memakai GPU jika tersedia, memisahkan satu sesi untuk validasi,
-menyeimbangkan kelas, dan menyimpan `models/gesture_classifier.npz`. Contoh
-keluaran:
+Trainer memakai GPU jika tersedia, menyeimbangkan kelas, dan menyimpan
+`models/gesture_classifier.npz`. Sebelum training, ia memeriksa data yang
+relevan untuk gestur sekarang:
+
+- jumlah sesi yang berisi semua label,
+- proporsi frame `left` yang **menempel** vs **hampir-menempel**,
+- kelas yang belum ada atau sampelnya sedikit.
+
+Validasi memakai **sesi terpisah** jika setiap kelas muncul di lebih dari satu
+sesi dan pembagiannya memuat semua kelas. Jika sesi Anda satu label per sesi
+(seperti data lama), trainer memberi peringatan dan memakai **stratified frame
+split**; akurasinya optimistis tetapi model tetap dilatih dengan semua kelas.
+Untuk validasi jujur, rekam ulang semua label dalam tiap sesi.
+
+Contoh keluaran:
 
 ```
-Akurasi train: 98.7%
-Akurasi val  : 93.4%
+Akurasi train: 98.1%
+Akurasi val  : 95.5%
+Validasi     : stratified frame (optimistis)
+Sesi lengkap : 0/6
+Data left    : tempel 36% | hampir 18%
+...
+Metrik per kelas (support / recall / precision / F1):
+  neutral  n=  81  R= 97.5%  P=100.0%  F1= 98.8%
+  ...
 ```
 
-Jika akurasi validasi rendah (di bawah ±85%), tambah sesi/data, pastikan pose
-konsisten, dan jangan mencampur dua tangan dalam satu frame. Sesi validasi
-yang tidak berisi semua label membuat confusion matrix sulit dibaca.
+Perhatikan `R`/`P`/`F1` per kelas. Jika satu kelas lemah, confusion matrix di
+atas menunjukkan label apa yang tertukar; tambah variasi pose untuk label itu.
+Jangan hanya melihat akurasi total.
 
 Opsi lain:
 
 ```bat
 train.bat --data data/gestures.jsonl --out models/gesture_classifier.npz --epochs 200
+train.bat --config config.json --epochs 200
 ```
+
+`--config` dipakai untuk ambang `touch_press`/`touch_release` pada pemeriksaan
+kualitas dan tidak mengubah arsitektur model.
 
 ### 3.3 Aktifkan classifier
 

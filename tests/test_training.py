@@ -8,7 +8,13 @@ import numpy as np
 import pytest
 
 from handtrack.classifier import CLASSES, FEATURE_DIM, GestureClassifier
-from handtrack.training import Dataset, load_dataset, train_model
+from handtrack.training import (
+    Dataset,
+    check_dataset,
+    load_dataset,
+    split_train_val,
+    train_model,
+)
 from tests.helpers import make_hand
 
 
@@ -36,6 +42,9 @@ def test_load_dataset(tmp_path) -> None:
     assert dataset.classes == ("neutral", "left")
     assert dataset.counts == {"neutral": 1, "left": 1}
     assert set(dataset.sessions) == {"S1", "S2"}
+    assert dataset.index_pinch is not None
+    assert dataset.index_pinch.shape == (2,)
+    assert np.isfinite(dataset.index_pinch).all()
 
 
 def test_load_dataset_rejects_bad_landmarks(tmp_path) -> None:
@@ -54,6 +63,43 @@ def test_load_dataset_rejects_bad_landmarks(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="21,3"):
         load_dataset(path)
+
+
+def test_split_uses_complete_sessions() -> None:
+    labels = np.array([0, 0, 1, 1, 0, 0, 1, 1])
+    sessions = np.array(["S1", "S1", "S1", "S1", "S2", "S2", "S2", "S2"])
+    train, val, mode = split_train_val(labels, sessions, val_fraction=0.5, seed=1)
+    assert mode == "session"
+    assert set(labels[train]) == {0, 1}
+    assert set(labels[val]) == {0, 1}
+
+
+def test_split_falls_back_for_single_label_sessions() -> None:
+    labels = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    sessions = np.array(["S1", "S1", "S1", "S1", "S2", "S2", "S2", "S2"])
+    train, val, mode = split_train_val(labels, sessions, val_fraction=0.5, seed=1)
+    assert mode == "stratified"
+    assert set(labels[train]) == {0, 1}
+    assert set(labels[val]) == {0, 1}
+
+
+def test_quality_warns_about_incomplete_sessions() -> None:
+    dataset = Dataset(
+        features=np.zeros((10, FEATURE_DIM), dtype=np.float32),
+        labels=np.array([0] * 5 + [1] * 5, dtype=np.int64),
+        sessions=np.array(["S1"] * 5 + ["S2"] * 5),
+        classes=("neutral", "left"),
+        counts={"neutral": 5, "left": 5},
+        index_pinch=np.array([1.0] * 5 + [0.1, 0.1, 0.3, 0.3, 0.3]),
+    )
+    report = check_dataset(
+        dataset, touch_press=0.18, touch_release=0.26, pinch_press=0.36
+    )
+    assert report.complete_sessions == 0
+    text = " ".join(report.warnings)
+    assert "sesi tidak berisi semua label" in text
+    assert report.left_touch_fraction == pytest.approx(0.4)
+    assert report.left_near_fraction == pytest.approx(0.6)
 
 
 def test_train_model_and_load_npz(tmp_path) -> None:
@@ -92,6 +138,7 @@ def test_train_model_and_load_npz(tmp_path) -> None:
         patience=5,
     )
     assert report.out_path.exists()
+    assert report.split_mode == "session"
     assert report.val_accuracy > 0.8
     assert int(report.confusion.sum()) == 6 * n_per
 

@@ -18,11 +18,13 @@ from pathlib import Path
 import numpy as np
 
 from .classifier import CLASSES, FEATURE_DIM, extract_features_from_landmarks
-from .hands import PROJECT_ROOT
+from .config import load_config
+from .hands import PROJECT_ROOT, Hand, Pinch, analyze_hand
 
 log = logging.getLogger(__name__)
 
 DEFAULT_DATA = PROJECT_ROOT / "data" / "gestures.jsonl"
+DEFAULT_CONFIG = PROJECT_ROOT / "config.json"
 DEFAULT_OUT = PROJECT_ROOT / "models" / "gesture_classifier.npz"
 HIDDEN1 = 128
 HIDDEN2 = 64
@@ -35,6 +37,16 @@ class Dataset:
     sessions: np.ndarray
     classes: tuple[str, ...]
     counts: dict[str, int]
+    index_pinch: np.ndarray | None = None
+
+
+@dataclass(frozen=True)
+class QualityReport:
+    warnings: tuple[str, ...]
+    session_count: int
+    complete_sessions: int
+    left_touch_fraction: float | None
+    left_near_fraction: float | None
 
 
 @dataclass(frozen=True)
@@ -49,6 +61,7 @@ class TrainingReport:
     train_sessions: tuple[str, ...]
     val_sessions: tuple[str, ...]
     classes: tuple[str, ...]
+    split_mode: str = "session"
 
 
 def load_dataset(path: Path | str) -> Dataset:
@@ -61,6 +74,7 @@ def load_dataset(path: Path | str) -> Dataset:
     labels: list[str] = []
     sessions: list[str] = []
     counts: Counter[str] = Counter()
+    index_pinch: list[float] = []
     with path.open("r", encoding="utf-8") as stream:
         for line_no, line in enumerate(stream, start=1):
             line = line.strip()
@@ -72,6 +86,8 @@ def load_dataset(path: Path | str) -> Dataset:
                 session = str(rec["session"])
                 hand = str(rec["hand"])
                 landmarks = np.asarray(rec["landmarks"], dtype=np.float64)
+                width = int(rec.get("width", 1280))
+                height = int(rec.get("height", 720))
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise ValueError(f"{path}:{line_no}: record tidak valid ({exc})") from exc
             if hand not in ("Left", "Right"):
@@ -82,7 +98,11 @@ def load_dataset(path: Path | str) -> Dataset:
                 )
             if not np.isfinite(landmarks[:, :2]).all():
                 raise ValueError(f"{path}:{line_no}: landmark tidak finite")
+            if width <= 0 or height <= 0:
+                width, height = 1280, 720
             features.append(extract_features_from_landmarks(landmarks, hand))
+            pinch = analyze_hand(Hand(hand, 1.0, landmarks, width, height)).pinch
+            index_pinch.append(float(pinch.get(Pinch.INDEX, float("nan"))))
             labels.append(label)
             sessions.append(session)
             counts[label] += 1
@@ -104,7 +124,150 @@ def load_dataset(path: Path | str) -> Dataset:
         sessions=np.array(sessions),
         classes=tuple(classes),
         counts=dict(counts),
+        index_pinch=np.array(index_pinch, dtype=np.float32),
     )
+
+
+def check_dataset(
+    dataset: Dataset,
+    *,
+    touch_press: float,
+    touch_release: float,
+    pinch_press: float,
+) -> QualityReport:
+    """Periksa data yang sekarang relevan untuk klik-tempel vs hold-dekat."""
+    classes = list(dataset.classes)
+    labels = np.asarray(dataset.labels)
+    sessions = np.asarray(dataset.sessions)
+    warnings: list[str] = []
+    unique_sessions = np.unique(sessions)
+    all_indices = set(range(len(classes)))
+    complete_sessions = 0
+    for session in unique_sessions:
+        present = set(labels[sessions == session].tolist())
+        if present == all_indices:
+            complete_sessions += 1
+
+    if len(unique_sessions) == 1:
+        warnings.append(
+            "Hanya ada 1 sesi. Validasi memakai split frame per kelas; akurasi "
+            "tidak mengukur generalisasi. Rekam beberapa sesi."
+        )
+    elif complete_sessions < len(unique_sessions):
+        warnings.append(
+            f"{len(unique_sessions) - complete_sessions}/{len(unique_sessions)} "
+            "sesi tidak berisi semua label. Split sesi-disjoint tidak bisa; "
+            "trainer memakai stratified frame split (akurasi optimistis). "
+            "Rekam semua label dalam satu sesi sebelum menekan N."
+        )
+
+    missing = [name for name in CLASSES if name not in classes]
+    if missing:
+        warnings.append(
+            f"Label belum ada: {', '.join(missing)}. Model tidak bisa "
+            "memprediksi label tersebut; rekam semua label bila dipakai."
+        )
+    small = [name for name in classes if dataset.counts.get(name, 0) < 30]
+    if small:
+        warnings.append(
+            f"Sampel <30 untuk: {', '.join(small)}. Tambah durasi rekaman."
+        )
+
+    touch_fraction: float | None = None
+    near_fraction: float | None = None
+    if "left" in classes and dataset.index_pinch is not None:
+        left_index = classes.index("left")
+        distances = np.asarray(dataset.index_pinch)[labels == left_index]
+        distances = distances[np.isfinite(distances)]
+        if distances.size:
+            touch_fraction = float(np.mean(distances <= touch_press))
+            near_fraction = float(
+                np.mean((distances > touch_release) & (distances <= pinch_press))
+            )
+            if touch_fraction < 0.15:
+                warnings.append(
+                    f"Data left: hanya {touch_fraction * 100:.0f}% frame dengan "
+                    "ujung jari menempel. Klik butuh contoh pose tempel; rekam "
+                    "juga variasi klik (ujung jari benar-benar bertemu)."
+                )
+            if near_fraction < 0.15:
+                warnings.append(
+                    f"Data left: hanya {near_fraction * 100:.0f}% frame di zona "
+                    "hampir-menempel. Hold butuh contoh pose celah kecil; rekam "
+                    "juga variasi hold tanpa menempel."
+                )
+
+    return QualityReport(
+        warnings=tuple(warnings),
+        session_count=len(unique_sessions),
+        complete_sessions=complete_sessions,
+        left_touch_fraction=touch_fraction,
+        left_near_fraction=near_fraction,
+    )
+
+
+def split_train_val(
+    labels: np.ndarray,
+    sessions: np.ndarray,
+    *,
+    val_fraction: float = 0.2,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray, str]:
+    """Split train/val; sesi-disjoint bila memungkinkan, jika tidak stratified."""
+    labels = np.asarray(labels)
+    sessions = np.asarray(sessions)
+    if not (0.0 < val_fraction < 1.0):
+        raise ValueError("val_fraction harus di antara 0 dan 1")
+    classes = np.unique(labels)
+    unique_sessions = np.unique(sessions)
+    can_session = len(unique_sessions) >= 2
+    if can_session:
+        for cls in classes:
+            if len(set(sessions[labels == cls].tolist())) < 2:
+                can_session = False
+                break
+    if can_session:
+        rng = np.random.default_rng(seed)
+        n_val = max(1, int(round(len(unique_sessions) * val_fraction)))
+        n_val = min(n_val, len(unique_sessions) - 1)
+        for _ in range(200):
+            shuffled = unique_sessions.copy()
+            rng.shuffle(shuffled)
+            val_sessions = set(shuffled[:n_val].tolist())
+            val_mask = np.isin(sessions, list(val_sessions))
+            train_mask = ~val_mask
+            if not val_mask.any() or not train_mask.any():
+                continue
+            if (
+                set(labels[val_mask].tolist()) == set(classes.tolist())
+                and set(labels[train_mask].tolist()) == set(classes.tolist())
+            ):
+                return train_mask, val_mask, "session"
+        log.warning(
+            "Tidak ada pembagian sesi yang memuat semua kelas di train dan "
+            "validasi; memakai stratified frame split."
+        )
+
+    rng = np.random.default_rng(seed + 1)
+    val_mask = np.zeros(len(labels), dtype=bool)
+    for cls in classes:
+        indices = np.flatnonzero(labels == cls)
+        if len(indices) < 2:
+            continue
+        n_val = max(1, int(round(len(indices) * val_fraction)))
+        n_val = min(n_val, len(indices) - 1)
+        chosen = rng.choice(indices, size=n_val, replace=False)
+        val_mask[chosen] = True
+    if not val_mask.any():
+        counts = np.bincount(labels)
+        cls = int(np.argmax(counts))
+        indices = np.flatnonzero(labels == cls)
+        if len(indices) >= 2:
+            val_mask[indices[0]] = True
+    train_mask = ~val_mask
+    if not train_mask.any():
+        raise ValueError("Split data gagal: data latih kosong")
+    return train_mask, val_mask, "stratified"
 
 
 def _mlp(torch, n_in: int, n_out: int):
@@ -155,31 +318,22 @@ def train_model(
     if epochs < 1 or batch_size < 1:
         raise ValueError("epochs dan batch harus >= 1")
 
-    rng = np.random.default_rng(seed)
-    sessions = np.unique(dataset.sessions)
-    if len(sessions) >= 2:
-        shuffled = list(sessions)
-        rng.shuffle(shuffled)
-        n_val = max(1, int(round(len(shuffled) * val_fraction)))
-        n_val = min(n_val, len(shuffled) - 1)
-        val_sessions = set(shuffled[:n_val])
-        val_mask = np.isin(dataset.sessions, list(val_sessions))
+    train_mask, val_mask, split_mode = split_train_val(
+        y, dataset.sessions, val_fraction=val_fraction, seed=seed
+    )
+    val_sessions = set(dataset.sessions[val_mask].tolist())
+    train_sessions = set(dataset.sessions[train_mask].tolist())
+    if split_mode == "session":
+        log.info(
+            "Validasi sesi terpisah: train=%s, val=%s",
+            sorted(train_sessions),
+            sorted(val_sessions),
+        )
     else:
         log.warning(
-            "Hanya 1 sesi. Validasi memakai split acak frame; ini kurang "
-            "mengukur generalisasi. Rekam sesi kedua untuk hasil terpercaya."
+            "Validasi memakai stratified frame split (bukan sesi terpisah); "
+            "akurasi bisa lebih optimistis. Rekam semua label dalam tiap sesi."
         )
-        val_mask = np.zeros(len(y), dtype=bool)
-        n_val = max(1, int(round(len(y) * val_fraction)))
-        val_mask[rng.choice(len(y), size=n_val, replace=False)] = True
-        val_sessions = set(sessions)
-
-    train_mask = ~val_mask
-    if not train_mask.any() or not val_mask.any():
-        raise ValueError("Split data gagal: train/validasi kosong")
-    if len(sessions) == 1:
-        # Label sesi validasi tetap sesi tersebut; report tidak menyesatkan.
-        val_sessions = set(sessions)
 
     train_classes = set(int(v) for v in np.unique(y[train_mask]))
     val_classes = set(int(v) for v in np.unique(y[val_mask]))
@@ -301,6 +455,7 @@ def train_model(
         train_sessions=tuple(sorted(set(dataset.sessions[train_mask]))),
         val_sessions=tuple(sorted(val_sessions)),
         classes=dataset.classes,
+        split_mode=split_mode,
     )
 
 
@@ -310,6 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Latih classifier gestur dari data landmark JSONL.",
     )
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--batch", type=int, default=256)
@@ -317,6 +473,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--val-fraction", type=float, default=0.2)
     return parser
+
+
+def class_metrics(
+    confusion: np.ndarray, classes: tuple[str, ...]
+) -> list[tuple[str, int, float, float, float]]:
+    """Support, recall, precision, F1 per kelas dari confusion matrix."""
+    rows: list[tuple[str, int, float, float, float]] = []
+    total = int(confusion.sum())
+    for index, name in enumerate(classes):
+        support = int(confusion[index].sum())
+        predicted = int(confusion[:, index].sum())
+        tp = int(confusion[index, index])
+        recall = tp / support if support else 0.0
+        precision = tp / predicted if predicted else 0.0
+        f1 = (
+            2.0 * precision * recall / (precision + recall)
+            if precision + recall
+            else 0.0
+        )
+        rows.append((name, support, recall, precision, f1))
+    if total == 0:  # pragma: no cover - dipakai untuk pesan
+        log.warning("Confusion matrix kosong")
+    return rows
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -327,7 +506,27 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
     try:
+        cfg = load_config(args.config)
         dataset = load_dataset(args.data)
+        quality = check_dataset(
+            dataset,
+            touch_press=cfg.gestures.touch_press,
+            touch_release=cfg.gestures.touch_release,
+            pinch_press=cfg.gestures.pinch_press,
+        )
+        for warning in quality.warnings:
+            log.warning("%s", warning)
+        log.info(
+            "Sesi lengkap (semua label): %d/%d",
+            quality.complete_sessions,
+            quality.session_count,
+        )
+        if quality.left_touch_fraction is not None:
+            log.info(
+                "Data left: tempel %.0f%%, hampir-menempel %.0f%%",
+                quality.left_touch_fraction * 100,
+                (quality.left_near_fraction or 0.0) * 100,
+            )
         report = train_model(
             dataset,
             args.out,
@@ -352,12 +551,45 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Epoch        : {report.epochs_run}")
     print(f"  Akurasi train: {report.train_accuracy * 100:.1f}%")
     print(f"  Akurasi val  : {report.val_accuracy * 100:.1f}%")
+    split_text = (
+        "sesi terpisah"
+        if report.split_mode == "session"
+        else "stratified frame (optimistis)"
+    )
+    print(f"  Validasi     : {split_text}")
+    print(f"  Sesi lengkap : {quality.complete_sessions}/{quality.session_count}")
+    if quality.left_touch_fraction is not None:
+        print(
+            "  Data left    : "
+            f"tempel {quality.left_touch_fraction * 100:.0f}% | "
+            f"hampir {((quality.left_near_fraction or 0.0) * 100):.0f}%"
+        )
     print(f"  Sesi train   : {', '.join(report.train_sessions)}")
     print(f"  Sesi val     : {', '.join(report.val_sessions)}")
     print("  Confusion (baris=asli, kolom=prediksi):")
     for i, name in enumerate(report.classes):
         row = " ".join(f"{v:5d}" for v in report.confusion[i])
         print(f"    {name:8s} {row}")
+    print("  Metrik per kelas (support / recall / precision / F1):")
+    weak: list[str] = []
+    for name, support, recall, precision, f1 in class_metrics(
+        report.confusion, report.classes
+    ):
+        if support == 0:
+            print(f"    {name:8s} support=0 (tidak ada di validasi)")
+            continue
+        print(
+            f"    {name:8s} n={support:4d}  "
+            f"R={recall * 100:5.1f}%  P={precision * 100:5.1f}%  "
+            f"F1={f1 * 100:5.1f}%"
+        )
+        if recall < 0.7 or precision < 0.7:
+            weak.append(name)
+    if weak:
+        print(
+            "  Perhatian    : kelas lemah "
+            f"{', '.join(weak)}. Tambah data variasi pose; cek confusion di atas."
+        )
     print()
     print("  Aktifkan di config.json:")
     print('    "gestures": { "classifier": { "enabled": true } }')

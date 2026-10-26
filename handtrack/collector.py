@@ -61,8 +61,9 @@ def draw_preview(
         (f"LABEL {label.upper()}  [1-6]", YELLOW),
         ("REC  space = stop" if recording else "PAUSE  space = rekam", RED if recording else MUTED),
         (
-            f"{counts.get(label, 0)} frame label ini  |  "
-            f"tangan={hands[0].label if len(hands) == 1 else len(hands)}  |  {fps:.0f} fps",
+            f"{counts.get(label, 0)} frame | "
+            f"sesi {sum(1 for c in CLASSES if counts.get(c, 0) > 0)}/{len(CLASSES)} label "
+            f"| tangan={hands[0].label if len(hands) == 1 else len(hands)} | {fps:.0f} fps",
             MUTED,
         ),
     ]
@@ -96,6 +97,8 @@ def write_sample(stream, *, session: str, label: str, hand: Hand, now: float) ->
         "label": label,
         "hand": hand.label,
         "landmarks": np.round(hand.landmarks, 6).tolist(),
+        "width": int(hand.width),
+        "height": int(hand.height),
         "t": round(now, 3),
     }
     stream.write(json.dumps(record, separators=(",", ":")) + "\n")
@@ -142,8 +145,11 @@ def run(args: argparse.Namespace) -> int:
         print("  n      : sesi baru (ulangi semua label untuk sesi ini)")
         print("  q/ESC  : keluar")
         print()
-        print("  Rekam tiap label 20-40 detik, tangan bervariasi jarak/posisi.")
-        print("  Lakukan minimal 2 sesi, masing-masing berisi semua label.")
+        print("  Rekam SEMUA 6 label dalam satu sesi; baru tekan N untuk sesi")
+        print("  berikutnya. Untuk label left, rekam dua variasi: ujung jari")
+        print("  menempel (klik) dan hampir menempel (hold/drag).")
+        print("  Masing-masing label total 20-40 detik, variasi jarak/posisi.")
+        print("  Minimal 2 sesi; setiap sesi berisi semua label.")
         print("=" * 62)
 
         with out_path.open("a", encoding="utf-8") as stream:
@@ -195,6 +201,14 @@ def run(args: argparse.Namespace) -> int:
                     recording = not recording
                     log.info("Rekam %s", "mulai" if recording else "berhenti")
                 elif key in (ord("n"), ord("N")):
+                    covered = sum(1 for c in CLASSES if counts.get(c, 0) > 0)
+                    if covered < len(CLASSES):
+                        log.warning(
+                            "Sesi baru dimulai dengan %d/%d label. Untuk validasi "
+                            "yang jujur, rekam semua label dalam satu sesi sebelum N.",
+                            covered,
+                            len(CLASSES),
+                        )
                     session_no += 1
                     session = f"S{datetime.now():%Y%m%d-%H%M%S}-{session_no}"
                     recording = False
