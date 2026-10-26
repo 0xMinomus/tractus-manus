@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = PROJECT_ROOT / "config.json"
 DEFAULT_OUT = PROJECT_ROOT / "data" / "gestures.jsonl"
-WINDOW = "HandTrack Collector"
+WINDOW = "Tractus Manus Collector"
 LABEL_KEYS = {str(i + 1): label for i, label in enumerate(CLASSES)}
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 WHITE = (245, 245, 245)
@@ -186,7 +186,7 @@ def run(args: argparse.Namespace) -> int:
         cv2.namedWindow(WINDOW, cv2.WINDOW_AUTOSIZE)
         print()
         print("=" * 62)
-        print("  Perekam data gestur HandTrack")
+        print("  Perekam data gestur Tractus Manus")
         print("=" * 62)
         print(f"  Output : {out_path}")
         print(f"  Sesi   : {session}")

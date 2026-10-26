@@ -54,7 +54,7 @@ class HandTrackApp:
         cfg = self.cfg
         print()
         print("=" * 62)
-        print("  HandTrack - kontrol mouse dengan gestur tangan")
+        print("  Tractus Manus - kontrol mouse dengan gestur tangan")
         print("=" * 62)
         print(f"  Kamera        : index {cfg.camera.index} "
               f"({cfg.camera.width}x{cfg.camera.height} diminta)")
@@ -394,4 +394,4 @@ class HandTrackApp:
             if cfg.ui.show_preview:
                 with contextlib.suppress(cv2.error):
                     cv2.destroyAllWindows()
-        print("HandTrack selesai. Semua tombol mouse sudah dilepas.")
+        print("Tractus Manus selesai. Semua tombol mouse sudah dilepas.")

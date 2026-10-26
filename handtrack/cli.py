@@ -1,4 +1,4 @@
-"""Entrypoint CLI HandTrack."""
+"""Entrypoint CLI Tractus Manus."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="handtrack",
+        prog="tractus-manus",
         description="Kontrol mouse Windows memakai gestur tangan dari webcam.",
     )
     parser.add_argument(
@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="tulis config default ke path --config jika belum ada, lalu keluar",
     )
-    parser.add_argument("--version", action="version", version=f"HandTrack {VERSION}")
+    parser.add_argument("--version", action="version", version=f"Tractus Manus {VERSION}")
     return parser
 
 

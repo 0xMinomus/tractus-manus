@@ -10,7 +10,7 @@ from .gestures import Action, FrameState, Mode
 from .hands import CURSOR_LANDMARK, HAND_CONNECTIONS, Hand, Pinch, analyze_hand
 from .mapping import ScreenBounds
 
-WINDOW_NAME = "HandTrack"
+WINDOW_NAME = "Tractus Manus"
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 WHITE = (238, 238, 238)
@@ -208,7 +208,7 @@ class Overlay:
         )
         mode_text = "JEDA" if state.mode is Mode.PAUSED else state.mode.value
 
-        _text(frame, "HandTrack", 28, 46, 0.78, WHITE, 2)
+        _text(frame, "Tractus Manus", 28, 46, 0.78, WHITE, 2)
         fps_text = f"{fps:4.0f} fps"
         (fw, _), _ = cv2.getTextSize(fps_text, FONT, 0.46, 1)
         _text(frame, fps_text, 14 + panel_w - fw - 14, 44, 0.46, MUTED, 1)

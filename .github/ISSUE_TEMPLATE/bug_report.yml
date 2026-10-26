@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a reproducible problem with the application, build, or documentation.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not attach camera images, landmark recordings,
+        personal data, or a local `config.json`. Use synthetic landmarks or a
+        description instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: A short description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the gesture, the target application, and the keys or settings involved.
+      placeholder: |
+        1. Run run.bat
+        2. Make the near pinch
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release version, or the output of git rev-parse --short HEAD.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Remove camera paths, usernames, and personal information before pasting.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed camera images, recordings, personal paths, and secrets from this report.
+          required: true

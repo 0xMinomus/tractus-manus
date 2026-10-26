@@ -100,7 +100,7 @@ class WindowsMouse:
             self._last_error_log = now
             log.warning(
                 "SendInput gagal (error %s). Jika target berupa aplikasi elevated, "
-                "jalankan HandTrack sebagai administrator.",
+                "jalankan Tractus Manus sebagai administrator.",
                 ctypes.get_last_error(),
             )
         return False

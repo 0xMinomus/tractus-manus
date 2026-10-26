@@ -171,7 +171,7 @@ def ensure_model(path: Path = DEFAULT_MODEL_PATH, timeout: float = 30.0) -> Path
     tmp = path.with_suffix(".download")
     log.info("Model belum ada, mengunduh %s ...", MODEL_URL)
     try:
-        request = urllib.request.Request(MODEL_URL, headers={"User-Agent": "handtrack/1.0"})
+        request = urllib.request.Request(MODEL_URL, headers={"User-Agent": "tractus-manus/1.0"})
         with urllib.request.urlopen(request, timeout=timeout) as response, tmp.open("wb") as out:
             while chunk := response.read(1 << 20):
                 out.write(chunk)

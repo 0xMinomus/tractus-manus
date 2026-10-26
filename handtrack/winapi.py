@@ -25,7 +25,7 @@ SWP_SHOWWINDOW = 0x0040
 
 def _require_windows() -> None:
     if sys.platform != "win32":
-        raise RuntimeError("HandTrack saat ini hanya mendukung Windows.")
+        raise RuntimeError("Tractus Manus saat ini hanya mendukung Windows.")
 
 
 def is_ctrl_down() -> bool:

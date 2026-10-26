@@ -21,8 +21,8 @@ def test_defaults_when_missing(tmp_path: Path) -> None:
     assert cfg.control.primary_hand == "auto"
 
 
-def test_repo_config_is_valid() -> None:
-    cfg = load_config(ROOT / "config.json")
+def test_example_config_is_valid() -> None:
+    cfg = load_config(ROOT / "config.example.json")
     # config.json adalah konfigurasi runtime pengguna (mis. classifier aktif),
     # jadi jangan paksa sama dengan default. Pastikan bagian inti tetap benar.
     base = AppConfig()

@@ -5,7 +5,7 @@ cd /d "%~dp0"
 where uv >nul 2>nul
 if errorlevel 1 (
     echo.
-    echo [HandTrack] uv tidak ditemukan.
+    echo [Tractus Manus] uv tidak ditemukan.
     echo Install uv dulu:  winget install --id=astral-sh.uv -e
     echo atau lihat https://docs.astral.sh/uv/
     echo.
@@ -13,20 +13,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [HandTrack] Menyiapkan Python 3.12 + dependensi...
+echo [Tractus Manus] Menyiapkan Python 3.12 + dependensi...
 uv python install 3.12
 if errorlevel 1 goto :error
-uv sync
+uv sync --no-dev
 if errorlevel 1 goto :error
 
 echo.
-echo [HandTrack] Setup selesai. Jalankan: run.bat
+echo [Tractus Manus] Setup selesai. Jalankan: run.bat
 echo.
 pause
 exit /b 0
 
 :error
 echo.
-echo [HandTrack] Setup gagal. Periksa pesan di atas.
+echo [Tractus Manus] Setup gagal. Periksa pesan di atas.
 pause
 exit /b 1

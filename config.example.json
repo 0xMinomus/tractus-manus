@@ -57,7 +57,7 @@
       "hold_ms": 1000
     },
     "classifier": {
-      "enabled": true,
+      "enabled": false,
       "model_path": "models/gesture_classifier.npz",
       "confidence": 0.65,
       "smoothing": 0.6

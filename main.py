@@ -1,4 +1,4 @@
-"""HandTrack: kontrol mouse Windows dengan gestur tangan."""
+"""Tractus Manus: kontrol mouse Windows dengan gestur tangan."""
 
 from __future__ import annotations
 

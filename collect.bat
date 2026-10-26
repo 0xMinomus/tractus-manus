@@ -8,7 +8,7 @@ if exist ".venv\Scripts\python.exe" (
 )
 
 echo.
-echo [HandTrack] Virtual environment belum ada.
+echo [Tractus Manus] Virtual environment belum ada.
 echo Jalankan setup.bat terlebih dahulu.
 echo.
 pause

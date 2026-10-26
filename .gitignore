@@ -7,3 +7,5 @@ capture_test.png
 *.log
 data/
 models/gesture_classifier.npz
+config.json
+dist/
