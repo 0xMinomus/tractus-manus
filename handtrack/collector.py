@@ -38,6 +38,33 @@ RED = (70, 80, 235)
 YELLOW = (70, 210, 235)
 
 
+def block_goal(label: str, count: int, target: int) -> int:
+    """Target blok berjalan; left dipecah menjadi dua blok setengah target."""
+    if target <= 0:
+        return 0
+    if label == "left":
+        half = max(1, target // 2)
+        return half if count < half else target
+    return target
+
+
+def should_stop(previous: int, current: int, label: str, target: int) -> bool:
+    """True saat auto-stop: left berhenti di setengah, semua di target akhir."""
+    if target <= 0:
+        return False
+    if label == "left":
+        half = max(1, target // 2)
+        if previous < half <= current:
+            return True
+    return current >= target
+
+
+def label_complete(label: str, count: int, target: int) -> bool:
+    if target <= 0:
+        return count > 0
+    return count >= target
+
+
 def draw_preview(
     frame: np.ndarray,
     hands: list[Hand],
@@ -47,6 +74,7 @@ def draw_preview(
     recording: bool,
     counts: Counter,
     fps: float,
+    target: int = 0,
 ) -> np.ndarray:
     h, w = frame.shape[:2]
     for hand in hands:
@@ -56,13 +84,28 @@ def draw_preview(
         for point in points:
             cv2.circle(frame, point, 4, WHITE, -1, cv2.LINE_AA)
 
+    count = counts.get(label, 0)
+    goal = block_goal(label, count, target)
+    if target > 0:
+        progress = f"{count}/{goal}"
+        if label == "left":
+            half = max(1, target // 2)
+            progress += " blok 1/2" if count < half else (
+                " blok 2/2" if count < target else " selesai"
+            )
+        elif count >= target:
+            progress += " selesai"
+    else:
+        progress = f"{count} frame"
+    covered = sum(
+        1 for c in CLASSES if label_complete(c, counts.get(c, 0), target)
+    )
     lines = [
         (f"SESI {session}", WHITE),
-        (f"LABEL {label.upper()}  [1-6]", YELLOW),
+        (f"LABEL {label.upper()}  [1-6]  target {target or '-'}", YELLOW),
         ("REC  space = stop" if recording else "PAUSE  space = rekam", RED if recording else MUTED),
         (
-            f"{counts.get(label, 0)} frame | "
-            f"sesi {sum(1 for c in CLASSES if counts.get(c, 0) > 0)}/{len(CLASSES)} label "
+            f"{progress} | sesi {covered}/{len(CLASSES)} label "
             f"| tangan={hands[0].label if len(hands) == 1 else len(hands)} | {fps:.0f} fps",
             MUTED,
         ),
@@ -80,7 +123,7 @@ def draw_preview(
         y += 32
     cv2.putText(
         frame,
-        "1-6 label | space rekam | n sesi baru | q keluar",
+        "1-6 label | space rekam/stop | n sesi baru | q keluar",
         (20, h - 18),
         FONT,
         0.5,
@@ -114,6 +157,9 @@ def run(args: argparse.Namespace) -> int:
 
     out_path: Path = args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    target = int(args.target)
+    if target < 0:
+        raise ConfigError("--target tidak boleh negatif")
 
     session_no = 1
     session = f"S{datetime.now():%Y%m%d-%H%M%S}-{session_no}"
@@ -140,6 +186,11 @@ def run(args: argparse.Namespace) -> int:
         print("=" * 62)
         print(f"  Output : {out_path}")
         print(f"  Sesi   : {session}")
+        if target > 0:
+            print(
+                f"  Target : {target} frame/label/sesi "
+                f"(left {target // 2}+{target - target // 2}); auto-stop"
+            )
         print("  1-6    : pilih label (merekam otomatis berhenti)")
         print("  space  : mulai / berhenti merekam")
         print("  n      : sesi baru (ulangi semua label untuk sesi ini)")
@@ -147,9 +198,10 @@ def run(args: argparse.Namespace) -> int:
         print()
         print("  Rekam SEMUA 6 label dalam satu sesi; baru tekan N untuk sesi")
         print("  berikutnya. Untuk label left, rekam dua variasi: ujung jari")
-        print("  menempel (klik) dan hampir menempel (hold/drag).")
-        print("  Masing-masing label total 20-40 detik, variasi jarak/posisi.")
-        print("  Minimal 2 sesi; setiap sesi berisi semua label.")
+        print("  menempel (klik) dan hampir menempel (hold/drag); auto-stop")
+        print(f"  di {target // 2 if target else '-'} dan {target or '-'} frame.")
+        print("  Rekam minimal 3 sesi lengkap untuk evaluasi yang stabil.")
+        print("  Variasikan jarak/posisi/sudut; jangan ubah H di tengah sesi.")
         print("=" * 62)
 
         with out_path.open("a", encoding="utf-8") as stream:
@@ -176,7 +228,15 @@ def run(args: argparse.Namespace) -> int:
                         hand=hands[0],
                         now=now,
                     )
+                    previous = counts[label]
                     counts[label] += 1
+                    if should_stop(previous, counts[label], label, target):
+                        recording = False
+                        log.info(
+                            "Target %s tercapai (%d frame). Pilih label berikutnya.",
+                            label,
+                            counts[label],
+                        )
 
                 draw_preview(
                     display,
@@ -186,6 +246,7 @@ def run(args: argparse.Namespace) -> int:
                     recording=recording,
                     counts=counts,
                     fps=fps,
+                    target=target,
                 )
                 cv2.imshow(WINDOW, display)
                 key = cv2.waitKey(1) & 0xFF
@@ -198,10 +259,26 @@ def run(args: argparse.Namespace) -> int:
                         recording = False
                         log.info("Label: %s (rekaman dijeda)", label)
                 elif key == ord(" "):
-                    recording = not recording
-                    log.info("Rekam %s", "mulai" if recording else "berhenti")
+                    if (
+                        not recording
+                        and target > 0
+                        and counts.get(label, 0) >= target
+                    ):
+                        log.info(
+                            "Label %s sudah penuh (%d/%d). Pilih label lain atau N.",
+                            label,
+                            counts.get(label, 0),
+                            target,
+                        )
+                    else:
+                        recording = not recording
+                        log.info("Rekam %s", "mulai" if recording else "berhenti")
                 elif key in (ord("n"), ord("N")):
-                    covered = sum(1 for c in CLASSES if counts.get(c, 0) > 0)
+                    covered = sum(
+                        1
+                        for c in CLASSES
+                        if label_complete(c, counts.get(c, 0), target)
+                    )
                     if covered < len(CLASSES):
                         log.warning(
                             "Sesi baru dimulai dengan %d/%d label. Untuk validasi "
@@ -231,6 +308,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--camera", type=int, default=None)
+    parser.add_argument(
+        "--target",
+        type=int,
+        default=600,
+        metavar="FRAME",
+        help="target frame per label per sesi; left dipecah dua blok (0 = manual)",
+    )
     parser.add_argument(
         "--out",
         type=Path,

@@ -193,18 +193,22 @@ Jendela perekam menampilkan skeleton dan status. Tunjukkan **satu tangan**
 | `N` | sesi baru |
 | `Q` / `Esc` | keluar |
 
-Ganti label otomatis menjeda rekaman supaya data tidak tercampur. Rekam
-masing-masing label **20-40 detik**, dengan variasi jarak tangan, posisi di
-frame, sudut, dan pencahayaan. Lakukan **minimal 2 sesi** (`N`), dan isi
-**semua 6 label di setiap sesi**. HUD menampilkan `sesi x/6 label`; jangan
-menekan `N` sebelum semua label muncul. Trainer memakai sesi sebagai pembatas
-validasi; sesi yang tidak lengkap membuat akurasi tidak jujur (trainer akan
-memperingatkan dan memakai split frame yang lebih optimistis).
+Ganti label otomatis menjeda rekaman supaya data tidak tercampur. Collector
+default memakai target **600 frame per label per sesi** dan berhenti otomatis
+saat target tercapai. Untuk `left`, target dipecah dua blok: **300 menempel +
+300 hampir-menempel**. Rekam dengan variasi jarak tangan, posisi di frame,
+sudut, dan pencahayaan.
+
+Lakukan **minimal 3 sesi lengkap** (`N`), dan isi **semua 6 label di setiap
+sesi**. HUD menampilkan `target` dan `sesi x/6 label`; jangan menekan `N`
+sebelum 6/6. Trainer memakai sesi sebagai pembatas validasi; sesi yang tidak
+lengkap membuat akurasi tidak jujur (trainer akan memperingatkan dan memakai
+split frame yang lebih optimistis).
 
 Untuk `left`, rekam **dua variasi dalam label yang sama**:
 
-- ujung jempol + telunjuk **menempel** (klik), dan
-- **hampir menempel** dengan celah kecil (hold/drag).
+- ujung jempol + telunjuk **menempel** (klik) — blok pertama, auto-stop 300,
+- **hampir menempel** dengan celah kecil (hold/drag) — blok kedua, auto-stop 600.
 
 Pose yang direkam:
 

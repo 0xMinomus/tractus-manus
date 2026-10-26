@@ -6,8 +6,28 @@ import json
 
 import numpy as np
 
-from handtrack.collector import draw_preview, write_sample
+from handtrack.collector import (
+    block_goal,
+    draw_preview,
+    label_complete,
+    should_stop,
+    write_sample,
+)
 from tests.helpers import make_hand
+
+
+def test_target_helpers() -> None:
+    assert block_goal("neutral", 0, 600) == 600
+    assert block_goal("left", 0, 600) == 300
+    assert block_goal("left", 300, 600) == 600
+    assert not should_stop(299, 300, "neutral", 600)
+    assert should_stop(299, 300, "left", 600)
+    assert not should_stop(300, 301, "left", 600)
+    assert should_stop(599, 600, "left", 600)
+    assert should_stop(599, 600, "neutral", 600)
+    assert not label_complete("left", 599, 600)
+    assert label_complete("left", 600, 600)
+    assert label_complete("neutral", 1, 0)
 
 
 def test_write_sample_roundtrip(tmp_path) -> None:
