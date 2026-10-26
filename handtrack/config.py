@@ -86,7 +86,7 @@ class ClassifierConfig:
     enabled: bool = False
     model_path: str = "models/gesture_classifier.npz"
     confidence: float = 0.65
-    smoothing: float = 0.6
+    smoothing: float = 0.7
 
 
 @dataclass(frozen=True)

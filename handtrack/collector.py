@@ -65,6 +65,10 @@ def label_complete(label: str, count: int, target: int) -> bool:
     return count >= target
 
 
+def session_complete(counts: Counter, target: int) -> bool:
+    return all(label_complete(label, counts.get(label, 0), target) for label in CLASSES)
+
+
 def draw_preview(
     frame: np.ndarray,
     hands: list[Hand],
@@ -274,23 +278,24 @@ def run(args: argparse.Namespace) -> int:
                         recording = not recording
                         log.info("Rekam %s", "mulai" if recording else "berhenti")
                 elif key in (ord("n"), ord("N")):
-                    covered = sum(
-                        1
-                        for c in CLASSES
-                        if label_complete(c, counts.get(c, 0), target)
-                    )
-                    if covered < len(CLASSES):
+                    if not session_complete(counts, target):
+                        covered = sum(
+                            1
+                            for c in CLASSES
+                            if label_complete(c, counts.get(c, 0), target)
+                        )
                         log.warning(
-                            "Sesi baru dimulai dengan %d/%d label. Untuk validasi "
-                            "yang jujur, rekam semua label dalam satu sesi sebelum N.",
+                            "N diabaikan: sesi baru %d/%d label. Selesaikan "
+                            "semua label dulu (HUD sesi x/6).",
                             covered,
                             len(CLASSES),
                         )
-                    session_no += 1
-                    session = f"S{datetime.now():%Y%m%d-%H%M%S}-{session_no}"
-                    recording = False
-                    counts = Counter()
-                    log.info("Sesi baru: %s", session)
+                    else:
+                        session_no += 1
+                        session = f"S{datetime.now():%Y%m%d-%H%M%S}-{session_no}"
+                        recording = False
+                        counts = Counter()
+                        log.info("Sesi baru: %s", session)
         return 0
     finally:
         if cap is not None:

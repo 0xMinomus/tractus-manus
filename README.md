@@ -239,36 +239,47 @@ relevan untuk gestur sekarang:
 - proporsi frame `left` yang **menempel** vs **hampir-menempel**,
 - kelas yang belum ada atau sampelnya sedikit.
 
-Validasi memakai **sesi terpisah** jika setiap kelas muncul di lebih dari satu
-sesi dan pembagiannya memuat semua kelas. Jika sesi Anda satu label per sesi
-(seperti data lama), trainer memberi peringatan dan memakai **stratified frame
-split**; akurasinya optimistis tetapi model tetap dilatih dengan semua kelas.
-Untuk validasi jujur, rekam ulang semua label dalam tiap sesi.
+Secara default trainer sekarang memakai **ensemble 5 MLP + label smoothing
+0,05**. Kelima model dilatih dengan seed berbeda; probabilitasnya dirata-rata
+saat inferensi sehingga keputusan lebih stabil. Model tetap MLP/features yang
+sama, hanya bobotnya disimpan sebagai tumpukan 5 model.
+
+Validasi memakai **sesi terpisah** bila memungkinkan:
+
+- jika tiap sesi berisi semua label, satu/lebih sesi dipakai sebagai validasi;
+- jika tiap sesi hanya satu label tetapi tiap kelas punya >=2 sesi, trainer
+  memakai satu sesi per kelas sebagai validasi (tetap sesi-terpisah);
+- jika tidak memungkinkan, ia memakai potongan **kronologis** tiap kelas
+  (bukan frame acak) dan memberi peringatan bahwa angkanya optimistis.
 
 Contoh keluaran:
 
 ```
-Akurasi train: 98.1%
-Akurasi val  : 95.5%
-Validasi     : stratified frame (optimistis)
-Sesi lengkap : 0/6
-Data left    : tempel 36% | hampir 18%
-...
+Ensemble     : 5 model | label smoothing 0.05
+Val per model: 95.1%, 95.3%, 95.0%, 95.2%, 95.4%
+Akurasi val  : 95.7%
+Validasi     : sesi terpisah
+Data left    : tempel 41% | hampir 32%
 Metrik per kelas (support / recall / precision / F1):
-  neutral  n=  81  R= 97.5%  P=100.0%  F1= 98.8%
+  left     n= 470  R= 91.5%  P= 89.2%  F1= 90.3%
   ...
 ```
 
-Perhatikan `R`/`P`/`F1` per kelas. Jika satu kelas lemah, confusion matrix di
-atas menunjukkan label apa yang tertukar; tambah variasi pose untuk label itu.
-Jangan hanya melihat akurasi total.
+Perhatikan `R`/`P`/`F1` per kelas. Jika satu kelas lemah, confusion matrix
+menunjukkan label apa yang tertukar; tambah variasi pose untuk label itu.
+Jangan hanya melihat akurasi total. Validasi frame dari satu rekaman bisa
+mendekati 100% meskipun generalisasi ke rekaman lain lebih rendah; karena itu
+rekam beberapa sesi/take yang benar-benar berbeda.
 
 Opsi lain:
 
 ```bat
 train.bat --data data/gestures.jsonl --out models/gesture_classifier.npz --epochs 200
+train.bat --ensemble 5 --label-smoothing 0.05
 train.bat --config config.json --epochs 200
 ```
+
+`--ensemble 1` memakai satu model; `--label-smoothing 0` mematikannya.
 
 `--config` dipakai untuk ambang `touch_press`/`touch_release` pada pemeriksaan
 kualitas dan tidak mengubah arsitektur model.
@@ -283,7 +294,7 @@ Ubah `config.json`:
     "enabled": true,
     "model_path": "models/gesture_classifier.npz",
     "confidence": 0.65,
-    "smoothing": 0.6
+    "smoothing": 0.7
   }
 }
 ```
@@ -348,7 +359,7 @@ Semua pengaturan ada di `config.json` (dibuat ulang dengan
 | `gestures.classifier.enabled` | `false` | Pakai classifier hasil training (bagian 3) |
 | `gestures.classifier.model_path` | `models/gesture_classifier.npz` | File model NPZ |
 | `gestures.classifier.confidence` | `0.65` | Ambang confidence agar prediksi AI dipakai |
-| `gestures.classifier.smoothing` | `0.6` | 0 = mentah; makin tinggi makin halus/lambat |
+| `gestures.classifier.smoothing` | `0.7` | 0 = mentah; makin tinggi makin halus/lambat |
 | `ui.show_preview` | `true` | Tampilkan jendela preview |
 | `ui.always_on_top` | `true` | Preview selalu di atas |
 | `ui.show_skeleton` | `true` | Gambar skeleton tangan |

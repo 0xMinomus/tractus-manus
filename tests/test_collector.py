@@ -6,10 +6,12 @@ import json
 
 import numpy as np
 
+from handtrack.classifier import CLASSES
 from handtrack.collector import (
     block_goal,
     draw_preview,
     label_complete,
+    session_complete,
     should_stop,
     write_sample,
 )
@@ -28,6 +30,9 @@ def test_target_helpers() -> None:
     assert not label_complete("left", 599, 600)
     assert label_complete("left", 600, 600)
     assert label_complete("neutral", 1, 0)
+    assert not session_complete({"neutral": 600, "left": 600}, 600)
+    all_labels = {c: 600 for c in CLASSES}
+    assert session_complete(all_labels, 600)
 
 
 def test_write_sample_roundtrip(tmp_path) -> None:

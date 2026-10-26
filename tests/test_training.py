@@ -81,6 +81,20 @@ def test_split_falls_back_for_single_label_sessions() -> None:
     assert mode == "stratified"
     assert set(labels[train]) == {0, 1}
     assert set(labels[val]) == {0, 1}
+    assert val.tolist() == [False, False, True, True, False, False, True, True]
+
+
+def test_split_uses_one_session_per_class_when_sessions_are_single_label() -> None:
+    labels = np.array([0, 0, 1, 1, 0, 0, 1, 1])
+    sessions = np.array(["A", "A", "B", "B", "C", "C", "D", "D"])
+    train, val, mode = split_train_val(labels, sessions, val_fraction=0.2, seed=1)
+    assert mode == "session"
+    assert set(labels[train]) == {0, 1}
+    assert set(labels[val]) == {0, 1}
+    val_sessions = set(sessions[val].tolist())
+    assert len(val_sessions) == 2
+    assert len(val_sessions & {"A", "C"}) == 1
+    assert len(val_sessions & {"B", "D"}) == 1
 
 
 def test_quality_warns_about_incomplete_sessions() -> None:
@@ -136,13 +150,19 @@ def test_train_model_and_load_npz(tmp_path) -> None:
         seed=1,
         val_fraction=0.5,
         patience=5,
+        ensemble=2,
+        label_smoothing=0.05,
     )
     assert report.out_path.exists()
     assert report.split_mode == "session"
+    assert report.ensemble_size == 2
+    assert len(report.member_val_accuracy) == 2
+    assert report.label_smoothing == pytest.approx(0.05)
     assert report.val_accuracy > 0.8
     assert int(report.confusion.sum()) == 6 * n_per
 
     clf = GestureClassifier(report.out_path, smoothing=0.0)
+    assert clf.ensemble_size == 2
     probs = clf._infer(np.asarray(dataset.features[0], dtype=np.float32))
     assert probs.shape == (len(CLASSES),)
     assert np.isfinite(probs).all()

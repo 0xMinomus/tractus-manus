@@ -62,6 +62,20 @@ class TrainingReport:
     val_sessions: tuple[str, ...]
     classes: tuple[str, ...]
     split_mode: str = "session"
+    ensemble_size: int = 1
+    label_smoothing: float = 0.0
+    member_val_accuracy: tuple[float, ...] = ()
+    member_epochs: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class MemberResult:
+    state: dict[str, object]
+    val_loss: float
+    epochs_run: int
+    train_accuracy: float
+    val_accuracy: float
+    val_probs: np.ndarray
 
 
 def load_dataset(path: Path | str) -> Dataset:
@@ -148,18 +162,28 @@ def check_dataset(
         if present == all_indices:
             complete_sessions += 1
 
+    can_session = len(unique_sessions) >= 2 and all(
+        len(set(sessions[labels == cls].tolist())) >= 2
+        for cls in range(len(classes))
+    )
     if len(unique_sessions) == 1:
         warnings.append(
             "Hanya ada 1 sesi. Validasi memakai split frame per kelas; akurasi "
             "tidak mengukur generalisasi. Rekam beberapa sesi."
         )
     elif complete_sessions < len(unique_sessions):
-        warnings.append(
-            f"{len(unique_sessions) - complete_sessions}/{len(unique_sessions)} "
-            "sesi tidak berisi semua label. Split sesi-disjoint tidak bisa; "
-            "trainer memakai stratified frame split (akurasi optimistis). "
-            "Rekam semua label dalam satu sesi sebelum menekan N."
-        )
+        if can_session:
+            warnings.append(
+                "Tidak ada sesi yang memuat semua label, tetapi setiap kelas "
+                "punya >=2 sesi; validasi memakai sesi-per-kelas (tetap "
+                "terpisah). Idealnya tetap rekam semua label dalam satu sesi."
+            )
+        else:
+            warnings.append(
+                f"{len(unique_sessions) - complete_sessions}/{len(unique_sessions)} "
+                "sesi tidak berisi semua label dan ada kelas dengan <2 sesi. "
+                "Trainer memakai split frame kronologis (akurasi optimistis)."
+            )
 
     missing = [name for name in CLASSES if name not in classes]
     if missing:
@@ -243,12 +267,32 @@ def split_train_val(
                 and set(labels[train_mask].tolist()) == set(classes.tolist())
             ):
                 return train_mask, val_mask, "session"
+        # Cadangan: pilih satu sesi per kelas sebagai validasi. Ini penting
+        # untuk data yang tiap sesinya hanya satu label tetapi tiap kelas
+        # memiliki beberapa sesi (beberapa kali rekam).
+        chosen_sessions: list[str] = []
+        for cls in classes:
+            options = sorted(set(sessions[labels == cls].tolist()))
+            rng.shuffle(options)
+            chosen_sessions.append(options[0])
+        val_sessions = set(chosen_sessions)
+        val_mask = np.isin(sessions, list(val_sessions))
+        train_mask = ~val_mask
+        if (
+            val_mask.any()
+            and train_mask.any()
+            and set(labels[val_mask].tolist()) == set(classes.tolist())
+            and set(labels[train_mask].tolist()) == set(classes.tolist())
+        ):
+            return train_mask, val_mask, "session"
         log.warning(
             "Tidak ada pembagian sesi yang memuat semua kelas di train dan "
             "validasi; memakai stratified frame split."
         )
 
-    rng = np.random.default_rng(seed + 1)
+    # Fallback: ambil ekor kronologis tiap kelas, bukan frame acak. Frame
+    # acak dari satu rekaman kontinu hampir identik dengan tetangganya dan
+    # membuat akurasi validasi terlalu optimistis.
     val_mask = np.zeros(len(labels), dtype=bool)
     for cls in classes:
         indices = np.flatnonzero(labels == cls)
@@ -256,8 +300,7 @@ def split_train_val(
             continue
         n_val = max(1, int(round(len(indices) * val_fraction)))
         n_val = min(n_val, len(indices) - 1)
-        chosen = rng.choice(indices, size=n_val, replace=False)
-        val_mask[chosen] = True
+        val_mask[indices[-n_val:]] = True
     if not val_mask.any():
         counts = np.bincount(labels)
         cls = int(np.argmax(counts))
@@ -288,6 +331,101 @@ def _mlp(torch, n_in: int, n_out: int):
     return MLP()
 
 
+def _fit_member(
+    torch,
+    *,
+    xtr,
+    ytr,
+    xval,
+    yval,
+    weight_t,
+    n_classes: int,
+    device: str,
+    seed: int,
+    epochs: int,
+    batch_size: int,
+    lr: float,
+    patience: int,
+    label_smoothing: float,
+    tag: str,
+) -> MemberResult:
+    torch.manual_seed(seed)
+    if device == "cuda":
+        torch.cuda.manual_seed_all(seed)
+
+    model = _mlp(torch, FEATURE_DIM, n_classes).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    loss_fn = torch.nn.CrossEntropyLoss(
+        weight=weight_t, label_smoothing=label_smoothing
+    )
+    best_loss = float("inf")
+    best_state = None
+    bad = 0
+    epochs_run = 0
+    n_train = int(xtr.shape[0])
+
+    for epoch in range(1, epochs + 1):
+        epochs_run = epoch
+        model.train()
+        perm = torch.randperm(n_train, device=device)
+        for start in range(0, n_train, batch_size):
+            idx = perm[start : start + batch_size]
+            optimizer.zero_grad(set_to_none=True)
+            logits = model(xtr[idx])
+            loss = loss_fn(logits, ytr[idx])
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        with torch.no_grad():
+            val_logits = model(xval)
+            val_loss = float(loss_fn(val_logits, yval).item())
+            val_acc = float((val_logits.argmax(dim=1) == yval).float().mean().item())
+        if val_loss < best_loss - 1e-6:
+            best_loss = val_loss
+            best_state = copy.deepcopy(model.state_dict())
+            bad = 0
+        else:
+            bad += 1
+        if epoch == 1 or epoch % 10 == 0 or bad == 0:
+            log.info(
+                "%s epoch %3d  val_loss %.4f  val_acc %.3f%s",
+                tag,
+                epoch,
+                val_loss,
+                val_acc,
+                "  *" if bad == 0 else "",
+            )
+        if bad >= patience:
+            log.info("%s early stop di epoch %d", tag, epoch)
+            break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    model.eval()
+    with torch.no_grad():
+        train_pred = model(xtr).argmax(dim=1)
+        val_logits = model(xval)
+        val_pred = val_logits.argmax(dim=1)
+        val_probs = torch.softmax(val_logits, dim=1)
+        train_acc = float((train_pred == ytr).float().mean().item())
+        val_acc = float((val_pred == yval).float().mean().item())
+        val_loss = float(loss_fn(val_logits, yval).item())
+
+    state = {
+        key: value.detach().cpu().clone()
+        for key, value in model.state_dict().items()
+    }
+    return MemberResult(
+        state=state,
+        val_loss=val_loss,
+        epochs_run=epochs_run,
+        train_accuracy=train_acc,
+        val_accuracy=val_acc,
+        val_probs=val_probs.cpu().numpy(),
+    )
+
+
 def train_model(
     dataset: Dataset,
     out_path: Path | str = DEFAULT_OUT,
@@ -298,6 +436,8 @@ def train_model(
     seed: int = 42,
     val_fraction: float = 0.2,
     patience: int = 30,
+    ensemble: int = 1,
+    label_smoothing: float = 0.0,
 ) -> TrainingReport:
     try:
         import torch
@@ -317,6 +457,10 @@ def train_model(
         raise ValueError("Label di luar kelas dataset")
     if epochs < 1 or batch_size < 1:
         raise ValueError("epochs dan batch harus >= 1")
+    if not (1 <= ensemble <= 8):
+        raise ValueError("ensemble harus 1..8")
+    if not (0.0 <= label_smoothing <= 0.2):
+        raise ValueError("label_smoothing harus 0..0.2")
 
     train_mask, val_mask, split_mode = split_train_val(
         y, dataset.sessions, val_fraction=val_fraction, seed=seed
@@ -370,85 +514,80 @@ def train_model(
     weights[present] = counts.sum() / (present.sum() * counts[present])
     weight_t = torch.tensor(weights, dtype=torch.float32, device=device)
 
-    model = _mlp(torch, FEATURE_DIM, n_classes).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    loss_fn = torch.nn.CrossEntropyLoss(weight=weight_t)
-    best_loss = float("inf")
-    best_state = None
-    bad = 0
-    epochs_run = 0
-    n_train = int(train_mask.sum())
-
-    for epoch in range(1, epochs + 1):
-        epochs_run = epoch
-        model.train()
-        perm = torch.randperm(n_train, device=device)
-        for start in range(0, n_train, batch_size):
-            idx = perm[start : start + batch_size]
-            optimizer.zero_grad(set_to_none=True)
-            logits = model(xtr[idx])
-            loss = loss_fn(logits, ytr[idx])
-            loss.backward()
-            optimizer.step()
-
-        model.eval()
-        with torch.no_grad():
-            val_logits = model(xval)
-            val_loss = float(loss_fn(val_logits, yval).item())
-            val_acc = float((val_logits.argmax(dim=1) == yval).float().mean().item())
-        if val_loss < best_loss - 1e-6:
-            best_loss = val_loss
-            best_state = copy.deepcopy(model.state_dict())
-            bad = 0
-        else:
-            bad += 1
-        if epoch == 1 or epoch % 10 == 0 or bad == 0:
-            log.info(
-                "epoch %3d  val_loss %.4f  val_acc %.3f%s",
-                epoch,
-                val_loss,
-                val_acc,
-                "  *" if bad == 0 else "",
+    log.info(
+        "Ensemble: %d model, label smoothing %.2f",
+        ensemble,
+        label_smoothing,
+    )
+    member_results: list[MemberResult] = []
+    for member in range(ensemble):
+        member_seed = seed + member
+        log.info("Melatih model %d/%d (seed %d)", member + 1, ensemble, member_seed)
+        member_results.append(
+            _fit_member(
+                torch,
+                xtr=xtr,
+                ytr=ytr,
+                xval=xval,
+                yval=yval,
+                weight_t=weight_t,
+                n_classes=n_classes,
+                device=device,
+                seed=member_seed,
+                epochs=epochs,
+                batch_size=batch_size,
+                lr=lr,
+                patience=patience,
+                label_smoothing=label_smoothing,
+                tag=f"m{member + 1}",
             )
-        if bad >= patience:
-            log.info("Early stop di epoch %d", epoch)
-            break
+        )
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
-    model.eval()
-    with torch.no_grad():
-        train_pred = model(xtr).argmax(dim=1)
-        val_pred = model(xval).argmax(dim=1)
-        train_acc = float((train_pred == ytr).float().mean().item())
-        val_acc = float((val_pred == yval).float().mean().item())
+    val_probs = np.mean([result.val_probs for result in member_results], axis=0)
+    y_true = yval.detach().cpu().numpy()
+    val_pred = val_probs.argmax(axis=1)
+    val_acc = float(np.mean(val_pred == y_true))
+    train_acc = float(np.mean([result.train_accuracy for result in member_results]))
+    best_val_loss = float(np.mean([result.val_loss for result in member_results]))
+    epochs_run = max(result.epochs_run for result in member_results)
 
     confusion = np.zeros((n_classes, n_classes), dtype=np.int64)
-    y_true = yval.detach().cpu().numpy()
-    y_pred = val_pred.detach().cpu().numpy()
-    for true, pred in zip(y_true, y_pred, strict=True):
+    for true, pred in zip(y_true, val_pred, strict=True):
         confusion[int(true), int(pred)] += 1
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    state = model.state_dict()
+
+    def weight_stack(key: str) -> np.ndarray:
+        return np.stack(
+            [result.state[key].numpy().T for result in member_results], axis=0
+        )
+
+    def bias_stack(key: str) -> np.ndarray:
+        return np.stack(
+            [result.state[key].numpy() for result in member_results], axis=0
+        )
+
     np.savez(
         out_path,
-        W1=state["fc1.weight"].detach().cpu().numpy().T,
-        b1=state["fc1.bias"].detach().cpu().numpy(),
-        W2=state["fc2.weight"].detach().cpu().numpy().T,
-        b2=state["fc2.bias"].detach().cpu().numpy(),
-        W3=state["fc3.weight"].detach().cpu().numpy().T,
-        b3=state["fc3.bias"].detach().cpu().numpy(),
+        W1=weight_stack("fc1.weight"),
+        b1=bias_stack("fc1.bias"),
+        W2=weight_stack("fc2.weight"),
+        b2=bias_stack("fc2.bias"),
+        W3=weight_stack("fc3.weight"),
+        b3=bias_stack("fc3.bias"),
         mean=mean.astype(np.float32),
         std=std.astype(np.float32),
         classes=np.array(dataset.classes, dtype=str),
+        ensemble=np.int64(ensemble),
+        label_smoothing=np.float64(label_smoothing),
+        format_version=np.int64(2),
     )
     return TrainingReport(
         out_path=out_path,
         device=device,
         epochs_run=epochs_run,
-        best_val_loss=best_loss,
+        best_val_loss=best_val_loss,
         train_accuracy=train_acc,
         val_accuracy=val_acc,
         confusion=confusion,
@@ -456,6 +595,10 @@ def train_model(
         val_sessions=tuple(sorted(val_sessions)),
         classes=dataset.classes,
         split_mode=split_mode,
+        ensemble_size=ensemble,
+        label_smoothing=label_smoothing,
+        member_val_accuracy=tuple(result.val_accuracy for result in member_results),
+        member_epochs=tuple(result.epochs_run for result in member_results),
     )
 
 
@@ -472,6 +615,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--val-fraction", type=float, default=0.2)
+    parser.add_argument(
+        "--ensemble",
+        type=int,
+        default=5,
+        help="jumlah MLP yang dilatih dan dirata-ratakan (1-8; default 5)",
+    )
+    parser.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.05,
+        help="label smoothing 0..0.2 (default 0.05)",
+    )
     return parser
 
 
@@ -535,6 +690,8 @@ def main(argv: list[str] | None = None) -> int:
             lr=args.lr,
             seed=args.seed,
             val_fraction=args.val_fraction,
+            ensemble=args.ensemble,
+            label_smoothing=args.label_smoothing,
         )
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         log.error("%s", exc)
@@ -549,6 +706,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Model        : {report.out_path}")
     print(f"  Device       : {report.device}")
     print(f"  Epoch        : {report.epochs_run}")
+    print(
+        f"  Ensemble     : {report.ensemble_size} model "
+        f"| label smoothing {report.label_smoothing:.2f}"
+    )
+    if report.member_val_accuracy:
+        members = ", ".join(
+            f"{value * 100:.1f}%" for value in report.member_val_accuracy
+        )
+        print(f"  Val per model: {members}")
     print(f"  Akurasi train: {report.train_accuracy * 100:.1f}%")
     print(f"  Akurasi val  : {report.val_accuracy * 100:.1f}%")
     split_text = (

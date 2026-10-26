@@ -114,33 +114,48 @@ class GestureClassifier:
         path = resolve_model_path(model_path)
         data = np.load(path, allow_pickle=False)
         try:
-            self.w1 = data["W1"].astype(np.float32)
-            self.b1 = data["b1"].astype(np.float32)
-            self.w2 = data["W2"].astype(np.float32)
-            self.b2 = data["b2"].astype(np.float32)
-            self.w3 = data["W3"].astype(np.float32)
-            self.b3 = data["b3"].astype(np.float32)
+            def stack(name: str, extra_dim: bool) -> np.ndarray:
+                arr = data[name].astype(np.float32)
+                if arr.ndim == (2 if extra_dim else 1):
+                    arr = arr[None]
+                if arr.ndim != (3 if extra_dim else 2):
+                    raise ValueError(f"Model tidak kompatibel: {name} {arr.shape}")
+                return arr
+
+            self.w1 = stack("W1", True)
+            self.b1 = stack("b1", False)
+            self.w2 = stack("W2", True)
+            self.b2 = stack("b2", False)
+            self.w3 = stack("W3", True)
+            self.b3 = stack("b3", False)
             self.mean = data["mean"].astype(np.float32)
             self.std = np.maximum(data["std"].astype(np.float32), 1e-6)
             self.classes = [str(c) for c in data["classes"].tolist()]
+        except KeyError as exc:
+            raise ValueError(f"Model tidak kompatibel: key {exc} tidak ada") from exc
         finally:
             data.close()
 
-        if self.w1.ndim != 2 or self.w1.shape[0] != FEATURE_DIM:
+        n_models = self.w1.shape[0]
+        hidden1 = self.w1.shape[2]
+        hidden2 = self.w2.shape[2]
+        n_out = self.w3.shape[2]
+        if self.w1.shape[1] != FEATURE_DIM:
             raise ValueError(
-                f"Model tidak kompatibel: W1 {self.w1.shape}, harus ({FEATURE_DIM}, hidden)."
+                f"Model tidak kompatibel: W1 {self.w1.shape}, fitur harus {FEATURE_DIM}."
             )
         if (
-            self.w2.shape[0] != self.w1.shape[1]
-            or self.w3.shape[0] != self.w2.shape[1]
-            or self.b1.shape != (self.w1.shape[1],)
-            or self.b2.shape != (self.w2.shape[1],)
-            or self.b3.shape != (self.w3.shape[1],)
+            self.b1.shape != (n_models, hidden1)
+            or self.w2.shape != (n_models, hidden1, hidden2)
+            or self.b2.shape != (n_models, hidden2)
+            or self.w3.shape != (n_models, hidden2, n_out)
+            or self.b3.shape != (n_models, n_out)
             or self.mean.shape != (FEATURE_DIM,)
             or self.std.shape != (FEATURE_DIM,)
-            or len(self.classes) != self.w3.shape[1]
+            or len(self.classes) != n_out
         ):
             raise ValueError("Model tidak kompatibel: dimensi layer/kelas tidak cocok.")
+        self.ensemble_size = n_models
         self.smoothing = float(np.clip(smoothing, 0.0, 1.0))
         self._probs: np.ndarray | None = None
 
@@ -149,12 +164,18 @@ class GestureClassifier:
 
     def _infer(self, features: np.ndarray) -> np.ndarray:
         x = (np.asarray(features, dtype=np.float32) - self.mean) / self.std
-        h1 = np.maximum(x @ self.w1 + self.b1, 0.0)
-        h2 = np.maximum(h1 @ self.w2 + self.b2, 0.0)
-        logits = h2 @ self.w3 + self.b3
-        logits -= np.max(logits)
-        e = np.exp(logits)
-        return e / max(float(np.sum(e)), 1e-12)
+        if x.ndim == 2:
+            probs = np.zeros((x.shape[0], len(self.classes)), dtype=np.float64)
+        else:
+            probs = np.zeros(len(self.classes), dtype=np.float64)
+        for index in range(self.ensemble_size):
+            h1 = np.maximum(x @ self.w1[index] + self.b1[index], 0.0)
+            h2 = np.maximum(h1 @ self.w2[index] + self.b2[index], 0.0)
+            logits = h2 @ self.w3[index] + self.b3[index]
+            logits = logits - np.max(logits, axis=-1, keepdims=True)
+            e = np.exp(logits)
+            probs += e / np.maximum(np.sum(e, axis=-1, keepdims=True), 1e-12)
+        return (probs / self.ensemble_size).astype(np.float32)
 
     def predict(self, hand: Hand) -> tuple[str, float]:
         probs = self._infer(extract_features(hand))
