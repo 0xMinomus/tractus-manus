@@ -10,7 +10,7 @@ The version lives in these files and must match:
 - `handtrack/__init__.py`
 - `handtrack/cli.py`
 
-Use semantic versioning. Tags use a `v` prefix, for example `v1.0.0`.
+Use semantic versioning. Tags use a `v` prefix, for example `v1.0.1`.
 
 ## Before building
 
@@ -45,8 +45,8 @@ store training recordings or face images.
 
 The builder creates:
 
-- `dist/tractus-manus-1.0.0-windows.zip`
-- `dist/tractus-manus-1.0.0-windows.zip.sha256`
+- `dist/tractus-manus-1.0.1-windows.zip`
+- `dist/tractus-manus-1.0.1-windows.zip.sha256`
 
 The archive contains the application, the MediaPipe model, the public
 `config.json` generated from `config.example.json`, tests, documentation, and
@@ -56,8 +56,8 @@ media.
 ## Verify the archive
 
 ```bat
-.venv\Scripts\python.exe -c "import zipfile; z=zipfile.ZipFile('dist/tractus-manus-1.0.0-windows.zip'); print('\n'.join(z.namelist()))"
-certutil -hashfile dist\tractus-manus-1.0.0-windows.zip SHA256
+.venv\Scripts\python.exe -c "import zipfile; z=zipfile.ZipFile('dist/tractus-manus-1.0.1-windows.zip'); print('\n'.join(z.namelist()))"
+certutil -hashfile dist\tractus-manus-1.0.1-windows.zip SHA256
 ```
 
 Extract the ZIP to a clean folder and run `setup.bat` and `run.bat`. The
@@ -68,11 +68,11 @@ work without a personal model.
 
 ```bat
 git add .
-git commit -m "release: v1.0.0"
-git tag v1.0.0
+git commit -m "release: v1.0.1"
+git tag v1.0.1
 git push origin main
-git push origin v1.0.0
-gh release create v1.0.0 dist\tractus-manus-1.0.0-windows.zip dist\tractus-manus-1.0.0-windows.zip.sha256 --title "Tractus Manus 1.0.0" --notes-file docs\RELEASE_NOTES_v1.0.0.md
+git push origin v1.0.1
+gh release create v1.0.1 dist\tractus-manus-1.0.1-windows.zip dist\tractus-manus-1.0.1-windows.zip.sha256 --title "Tractus Manus 1.0.1" --notes-file docs\RELEASE_NOTES_v1.0.1.md
 ```
 
 The README links to the latest release:

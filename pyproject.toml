@@ -1,6 +1,6 @@
 [project]
 name = "tractus-manus"
-version = "1.0.0"
+version = "1.0.1"
 description = "Windows mouse control with hand gestures from a webcam."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"

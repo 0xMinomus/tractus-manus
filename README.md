@@ -3,11 +3,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/0xMinomus/tractus-manus/releases/latest"><img alt="Download the Windows release" src="https://img.shields.io/badge/download-Windows_release-0f766e?style=for-the-badge"></a>
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0f172a">
-  <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-3776ab">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f766e"></a>
-  <a href="https://github.com/0xMinomus/tractus-manus/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/0xMinomus/tractus-manus/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/0xMinomus/tractus-manus/releases/latest"><img alt="Download the Windows release" src="https://img.shields.io/badge/download-Windows_release-000000?style=for-the-badge&labelColor=f5f5f5"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-000000?labelColor=f5f5f5">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-000000?labelColor=f5f5f5">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-000000?labelColor=f5f5f5"></a>
 </p>
 
 # Tractus Manus
@@ -23,7 +22,7 @@ The public release works with geometric gesture rules out of the box. You can al
 The recommended way to install is the Windows release:
 
 1. Install [uv](https://docs.astral.sh/uv/) if it is not already installed.
-2. Download `tractus-manus-1.0.0-windows.zip` from [GitHub Releases](https://github.com/0xMinomus/tractus-manus/releases/latest).
+2. Download `tractus-manus-1.0.1-windows.zip` from [GitHub Releases](https://github.com/0xMinomus/tractus-manus/releases/latest).
 3. Extract the ZIP and run `setup.bat` once. It installs Python 3.12 and the dependencies into `.venv`.
 4. Run `run.bat`.
 
@@ -157,7 +156,7 @@ uv run pytest -q
 uv run ruff check .
 ```
 
-The CI workflow runs the tests and lint on Windows. The training test skips automatically when PyTorch is not installed.
+The [CI workflow](https://github.com/0xMinomus/tractus-manus/actions/workflows/ci.yml) runs the tests and lint on Windows. The training test skips automatically when PyTorch is not installed.
 
 Release and packaging instructions are in [docs/RELEASING.md](docs/RELEASING.md).
 
@@ -206,5 +205,7 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) be
 ## License
 
 The source code is released under the [MIT License](LICENSE). The MediaPipe hand model and the Python dependencies keep their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
+
+The documentation artwork uses Bodoni Moda and IBM Plex Mono under the SIL Open Font License. Font files and license texts are in [docs/assets/fonts](docs/assets/fonts).
 
 Tractus Manus is not affiliated with Google or MediaPipe.

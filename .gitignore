@@ -9,3 +9,8 @@ data/
 models/gesture_classifier.npz
 config.json
 dist/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif

@@ -19,7 +19,7 @@ from .winapi import enable_dpi_awareness  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = PROJECT_ROOT / "config.json"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 log = logging.getLogger(__name__)
 

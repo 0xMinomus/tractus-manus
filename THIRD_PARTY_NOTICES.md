@@ -46,10 +46,13 @@ the default runtime installation.
 - License: MIT or Apache 2.0
 - Source: https://github.com/astral-sh/uv
 
-## Fonts in documentation
+## Documentation typefaces
 
-The SVG diagrams use generic system sans-serif font families. No font files
-are distributed with this repository.
+- Bodoni Moda: SIL Open Font License 1.1. Source: https://github.com/google/fonts/tree/main/ofl/bodonimoda
+- IBM Plex Mono: SIL Open Font License 1.1. Source: https://github.com/google/fonts/tree/main/ofl/ibmplexmono
+
+The font files and their license texts are in `docs/assets/fonts`. The
+documentation SVGs contain outlined text and do not load fonts at runtime.
 
 ## Trademarks
 

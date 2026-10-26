@@ -3,6 +3,26 @@
 All notable changes are listed here. The format follows Keep a Changelog, and
 versions use semantic versioning.
 
+## 1.0.1 - 2026-10-26
+
+### Changed
+
+- Replaced the documentation visual system with a monochrome halftone hand
+  field, derived from the hand landmark data.
+- Added Bodoni Moda and IBM Plex Mono for display and technical labels, with
+  SIL Open Font License files.
+- Rebuilt the README badges and system map in black, white, and gray.
+- Updated the release archive to include the refreshed documentation assets.
+
+### Fixed
+
+- The README no longer uses an external status badge that introduced color into
+  the monochrome header.
+- The system map now labels the optional classifier and the training path
+  without overlapping annotations.
+
+There are no runtime behavior changes in this release.
+
 ## 1.0.0 - 2026-10-26
 
 First public release.
