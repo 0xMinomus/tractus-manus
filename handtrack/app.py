@@ -17,7 +17,7 @@ from .gestures import Action, FrameState, Freeze, GestureEngine, Mode
 from .hands import HandTracker
 from .input import WHEEL_DELTA, MouseBackend, create_mouse
 from .overlay import WINDOW_NAME, Overlay
-from .winapi import position_window, screen_bounds, set_always_on_top
+from .winapi import is_ctrl_down, position_window, screen_bounds, set_always_on_top
 
 log = logging.getLogger(__name__)
 
@@ -76,14 +76,14 @@ class HandTrackApp:
         print("  Gestur        :")
         print("    JEPIT TELUNJUK + JEMPOL     -> nempel = klik, tahan hampir = drag")
         print("    JEPIT TENGAH + JEMPOL       -> klik kanan")
-        print("    JEPIT JARI MANIS + JEMPOL   -> klik tengah")
+        print("    JEPIT JARI MANIS + JEMPOL   -> klik tengah (M = on/off)")
         print("    TELUNJUK + TENGAH (2 jari)  -> scroll (tahan 0,12 dtk)")
         print("    KEPAL TANGAN                -> jeda / lanjut (tahan 1 dtk)")
         print("  Kursor        : ikuti buku jari telunjuk (stabil saat pinch)")
         if self.cfg.ui.show_preview:
             print("  Preview       : Q/ESC keluar | P jeda | [ ] smoothing | R reset")
             print("                  , . sensitivitas | H label tangan | T topmost")
-            print("                  D debug overlay")
+            print("                  M klik tengah on/off | D debug overlay")
         else:
             print("  Preview       : nonaktif (Ctrl+C untuk keluar)")
         ccfg = cfg.gestures.classifier
@@ -184,6 +184,15 @@ class HandTrackApp:
         elif key in (ord("d"), ord("D")):
             overlay.toggle_debug()
             overlay.flash(f"DEBUG {'ON' if overlay.debug else 'OFF'}", now, 0.8)
+        elif key in (ord("m"), ord("M")) or (key == 13 and is_ctrl_down()):
+            enabled = not engine.cfg.middle_click
+            canceled = engine.set_middle_click(enabled)
+            if canceled:
+                cursor.unfreeze(now)
+            overlay.flash(
+                f"KLIK TENGAH {'ON' if enabled else 'OFF'}", now, 1.2
+            )
+            log.info("Klik tengah: %s", "aktif" if enabled else "nonaktif")
         elif key in (ord("h"), ord("H")):
             tracker.swap_handedness = not tracker.swap_handedness
             overlay.flash(

@@ -239,6 +239,39 @@ def test_right_click_on_release(cfg: GestureConfig) -> None:
     assert released.freeze is Freeze.RELEASE
 
 
+def test_middle_click_can_be_toggled_at_runtime(cfg: GestureConfig) -> None:
+    engine = GestureEngine(cfg)
+    unlock(engine)
+    ring = make_hand("open", pinch="ring")
+
+    engine.update([ring], 0.3)
+    click = engine.update([make_hand("open")], 0.5)
+    assert click.actions == [Action.MIDDLE_CLICK]
+
+    engine.set_middle_click(False)
+    engine.update([make_hand("open")], 0.6)
+    engine.update([ring], 0.8)
+    blocked = engine.update([make_hand("open")], 0.9)
+    assert Action.MIDDLE_CLICK not in blocked.actions
+
+    engine.set_middle_click(True)
+    engine.update([make_hand("open")], 1.0)
+    engine.update([ring], 1.2)
+    restored = engine.update([make_hand("open")], 1.3)
+    assert restored.actions == [Action.MIDDLE_CLICK]
+
+
+def test_disabling_middle_cancels_active_middle_pinch(cfg: GestureConfig) -> None:
+    engine = GestureEngine(cfg)
+    unlock(engine)
+    ring = make_hand("open", pinch="ring")
+    engine.update([ring], 0.3)
+
+    assert engine.set_middle_click(False) is True
+    released = engine.update([make_hand("open")], 0.5)
+    assert Action.MIDDLE_CLICK not in released.actions
+
+
 def test_middle_click_uses_tight_ring_threshold(cfg: GestureConfig) -> None:
     engine = GestureEngine(cfg)
     unlock(engine)

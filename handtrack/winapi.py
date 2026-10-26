@@ -28,6 +28,17 @@ def _require_windows() -> None:
         raise RuntimeError("HandTrack saat ini hanya mendukung Windows.")
 
 
+def is_ctrl_down() -> bool:
+    """Apakah Ctrl sedang ditahan (untuk shortcut Ctrl+M di jendela preview)."""
+    if sys.platform != "win32":
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        return bool(user32.GetAsyncKeyState(0x11) & 0x8000)
+    except Exception:  # noqa: BLE001 - jangan gagalkan loop kamera
+        return False
+
+
 def enable_dpi_awareness() -> None:
     """Wajib dipanggil sebelum membuat jendela / membaca metrik layar."""
     _require_windows()

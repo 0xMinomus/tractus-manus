@@ -137,8 +137,9 @@ Catatan:
 - Jika sulit menjangkau sudut layar, tekan `.` untuk menaikkan sensitivitas
   (mis. 1,4-1,6); kurangi dengan `,`. Kotak area di preview ikut mengecil.
 - Klik tengah memakai ambang pinch yang lebih ketat karena pada pose V jempol
-  sering menyentuh jari manis yang terlipat. Jika tidak nyaman, matikan lewat
-  `gestures.middle_click: false`.
+  sering menyentuh jari manis yang terlipat. Tekan `M` atau `Ctrl+M` untuk
+  menonaktifkannya saat aplikasi berjalan (HUD menampilkan `KLIK TENGAH OFF`);
+  untuk permanen set `gestures.middle_click: false`.
 - Pose V lebih toleran: cukup salah satu dari jari manis/kelingking
   terlipat, jadi kelingking boleh sedikit keluar. Telapak terbuka (keduanya
   terentang) tidak dianggap scroll. Tidak perlu menahan lama.
@@ -154,6 +155,7 @@ Catatan:
 | `[` / `]` | Kurangi / tambah smoothing (min cutoff 0,3-8,0) |
 | `,` / `.` | Kurangi / tambah sensitivitas (0,5-3,0) |
 | `H` | Tukar label tangan kiri/kanan |
+| `M` / `Ctrl+M` | Aktif/nonaktifkan klik tengah saat aplikasi berjalan |
 | `R` | Reset filter dan posisi kursor |
 | `D` | Tampilkan angka debug (jarak pinch, sudut, lock, sensitivitas) |
 | `T` | Toggle preview selalu di atas |

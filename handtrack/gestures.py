@@ -693,6 +693,28 @@ class GestureEngine:
         )
 
     # ----------------------------------------------------------- kontrol luar
+    def set_middle_click(self, enabled: bool) -> bool:
+        """Aktif/nonaktifkan klik tengah saat runtime.
+
+        Mengembalikan True jika pinch tengah yang sedang aktif dibatalkan,
+        sehingga pemanggil perlu melepas freeze kursor.
+        """
+        self.cfg = replace(self.cfg, middle_click=enabled)
+        canceled = False
+        if not enabled:
+            if self._pinch is Pinch.RING:
+                self._pinch = None
+                self._pinch_ai = False
+                self._pinch_down = False
+                self._touch_clicked = False
+                self._touch_armed = True
+                self._hold_blocked = False
+                canceled = True
+            if self._pending_pinch is Pinch.RING:
+                self._pending_pinch = None
+                self._pending_since = None
+        return canceled
+
     def force_pause(self, now: float = 0.0) -> None:
         """Jeda dari keyboard; pemanggil wajib melepas semua tombol backend."""
         self.mode = Mode.PAUSED
